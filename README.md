@@ -1,5 +1,7 @@
 # claude-code-scheduler
 
+[![CI](https://github.com/dortort/claude-code-scheduler/actions/workflows/ci.yml/badge.svg)](https://github.com/dortort/claude-code-scheduler/actions/workflows/ci.yml)
+
 A Claude Code plugin for scheduling recurring and one-time AI-assisted tasks using native OS schedulers (launchd on macOS, crontab on Linux).
 
 ## Features
@@ -89,10 +91,30 @@ Global config takes precedence on ID collision. Project configs cannot set `skip
 
 ```bash
 npm install
-npm test          # 258 tests
-npm run build     # TypeScript compilation
-npm run typecheck # Type checking only
+npm test            # 258 tests
+npm run lint        # ESLint with typescript-eslint
+npm run typecheck   # Type checking only
+npm run build       # TypeScript compilation
+npm run test:coverage  # Tests with coverage report
 ```
+
+CI runs automatically on every push and PR to `main` (lint, typecheck, test on Node 18+22, build).
+
+### Releasing
+
+Publishing is automated via GitHub Actions when a [GitHub Release](https://docs.github.com/en/repositories/releasing-projects-on-github) is created. The release workflow requires:
+
+- An `npm` environment configured in the repository settings
+- An `NPM_TOKEN` secret with publish access
+
+### Branch Protection (Recommended)
+
+Enable branch protection on `main` requiring these status checks to pass:
+- Lint
+- Typecheck
+- Test (Node 18)
+- Test (Node 22)
+- Build
 
 ## License
 
