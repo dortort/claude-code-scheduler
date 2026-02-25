@@ -5,7 +5,7 @@ allowed-tools:
   - Bash(node -e *)
 ---
 
-# /schedule-list
+# /list
 
 List all scheduled tasks with their status, schedule, and next run time.
 
@@ -27,7 +27,7 @@ List all scheduled tasks with their status, schedule, and next run time.
 
 3. Format as a readable table or list.
 
-4. If no tasks exist, inform the user and suggest using `/schedule-add`.
+4. If no tasks exist, inform the user and suggest using `/scheduler:add`.
 
 ## Examples
 

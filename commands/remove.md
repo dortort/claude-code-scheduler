@@ -9,7 +9,7 @@ allowed-tools:
   - Bash(crontab *)
 ---
 
-# /schedule-remove
+# /remove
 
 Remove a scheduled task by ID or name.
 
@@ -29,7 +29,7 @@ Remove a scheduled task by ID or name.
    - Remove from the configuration using `removeTask()` from `src/config.ts`
    - Report success
 
-4. If the task is not found, inform the user and suggest `/schedule-list` to see available tasks.
+4. If the task is not found, inform the user and suggest `/scheduler:list` to see available tasks.
 
 ## Examples
 

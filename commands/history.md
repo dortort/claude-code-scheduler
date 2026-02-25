@@ -5,7 +5,7 @@ allowed-tools:
   - Bash(node -e *)
 ---
 
-# /schedule-history
+# /history
 
 View execution history for scheduled tasks.
 

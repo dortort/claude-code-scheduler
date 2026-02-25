@@ -8,7 +8,7 @@ allowed-tools:
   - Bash(node -e *)
 ---
 
-# /schedule-add
+# /add
 
 Add a new scheduled task. Accepts a natural language schedule or a cron expression.
 

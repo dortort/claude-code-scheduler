@@ -7,7 +7,7 @@ allowed-tools:
   - Bash(node -e *)
 ---
 
-# /schedule-status
+# /status
 
 Show the health status of the scheduling system and individual tasks.
 

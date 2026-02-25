@@ -1,5 +1,5 @@
 {
-  "name": "claude-code-scheduler",
+  "name": "@dortort/scheduler",
   "version": "0.1.0",
   "description": "Claude Code plugin for scheduling recurring and one-time AI-assisted tasks using native OS schedulers",
   "type": "module",

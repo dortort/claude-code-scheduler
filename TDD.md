@@ -360,7 +360,7 @@ Dependency injection: all git functions accept optional `exec` parameter for tes
 TRUSTED (user-controlled):
 ├── ~/.claude/schedules.json (global config)
 ├── ~/.claude/logs/* (logs and wrapper scripts)
-└── User input via /schedule-add
+└── User input via /scheduler:add
 
 UNTRUSTED (repo-controlled):
 ├── <project>/.claude/schedules.json (project config)

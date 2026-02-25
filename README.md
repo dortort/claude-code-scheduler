@@ -1,4 +1,4 @@
-# claude-code-scheduler
+# @dortort/scheduler
 
 [![CI](https://github.com/dortort/claude-code-scheduler/actions/workflows/ci.yml/badge.svg)](https://github.com/dortort/claude-code-scheduler/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
@@ -28,7 +28,7 @@ A Claude Code plugin for scheduling recurring and one-time AI-assisted tasks usi
 Install as a Claude Code plugin:
 
 ```bash
-claude plugin install claude-code-scheduler
+claude plugin install @dortort/scheduler
 ```
 
 Or for local development:
@@ -41,17 +41,17 @@ claude --plugin-dir /path/to/claude-code-scheduler
 
 | Command | Description |
 |---------|-------------|
-| `/schedule-add` | Add a new scheduled task (NL or cron) |
-| `/schedule-list` | List all configured tasks with status |
-| `/schedule-remove` | Remove a task by ID or name |
-| `/schedule-status` | Health check for the scheduling system |
-| `/schedule-run` | Manually trigger a task |
-| `/schedule-logs` | View stdout/stderr logs for a task |
-| `/schedule-history` | View execution history with filters |
+| `/scheduler:add` | Add a new scheduled task (NL or cron) |
+| `/scheduler:list` | List all configured tasks with status |
+| `/scheduler:remove` | Remove a task by ID or name |
+| `/scheduler:status` | Health check for the scheduling system |
+| `/scheduler:run` | Manually trigger a task |
+| `/scheduler:logs` | View stdout/stderr logs for a task |
+| `/scheduler:history` | View execution history with filters |
 
 ## Skill
 
-Say "schedule a daily code review at 9am" and the plugin will guide you through setup using the `/schedule-add` command.
+Say "schedule a daily code review at 9am" and the plugin will guide you through setup using the `/scheduler:add` command.
 
 ## Architecture
 

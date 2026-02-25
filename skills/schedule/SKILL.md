@@ -22,7 +22,7 @@ You want to schedule a recurring or one-time AI-assisted task. I'll help you set
 
 ## Process
 
-I will use the `/schedule-add` command to:
+I will use the `/scheduler:add` command to:
 1. Parse your schedule into a cron expression
 2. Show you when the next 3 runs will be
 3. Register the task with your OS scheduler (launchd on macOS, crontab on Linux)

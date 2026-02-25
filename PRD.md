@@ -42,7 +42,7 @@ Developers perform repetitive AI-assisted workflows daily -- code reviews, depen
 
 #### 2.1.1 Schedule Creation
 
-**Description:** Users create scheduled tasks via natural language or cron expressions through the `/schedule-add` command.
+**Description:** Users create scheduled tasks via natural language or cron expressions through the `/scheduler:add` command.
 
 **Functional Requirements:**
 
@@ -142,13 +142,13 @@ OS scheduler triggers wrapper script
 
 | Command | Description |
 |---------|-------------|
-| `/schedule-add` | Create a new scheduled task |
-| `/schedule-list` | View all scheduled tasks with status and next run |
-| `/schedule-remove` | Remove a scheduled task and unregister from OS |
-| `/schedule-status` | Check scheduler health and sync status |
-| `/schedule-run` | Manually trigger a task |
-| `/schedule-logs` | View execution stdout/stderr logs |
-| `/schedule-history` | View execution history with filters |
+| `/scheduler:add` | Create a new scheduled task |
+| `/scheduler:list` | View all scheduled tasks with status and next run |
+| `/scheduler:remove` | Remove a scheduled task and unregister from OS |
+| `/scheduler:status` | Check scheduler health and sync status |
+| `/scheduler:run` | Manually trigger a task |
+| `/scheduler:logs` | View execution stdout/stderr logs |
+| `/scheduler:history` | View execution history with filters |
 
 ### 2.3 Configuration
 

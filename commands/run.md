@@ -6,7 +6,7 @@ allowed-tools:
   - Bash(/bin/bash *)
 ---
 
-# /schedule-run
+# /run
 
 Manually trigger a scheduled task for immediate execution.
 
@@ -28,7 +28,7 @@ Manually trigger a scheduled task for immediate execution.
    - Record the execution in history using `recordExecution()` from `src/history/index.ts`
    - Report the result (success/failure/timeout)
 
-4. If the task is not found, inform the user and suggest `/schedule-list`.
+4. If the task is not found, inform the user and suggest `/scheduler:list`.
 
 ## Important constraints
 

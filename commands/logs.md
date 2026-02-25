@@ -5,7 +5,7 @@ allowed-tools:
   - Bash(node -e *)
 ---
 
-# /schedule-logs
+# /logs
 
 View stdout and stderr logs for a scheduled task.
 
