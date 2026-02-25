@@ -1,0 +1,17 @@
+{
+  "name": "claude-code-scheduler",
+  "version": "0.1.0",
+  "description": "Schedule recurring and one-time AI-assisted tasks using native OS schedulers",
+  "commands": [
+    "commands/schedule-add.md",
+    "commands/schedule-list.md",
+    "commands/schedule-remove.md",
+    "commands/schedule-status.md",
+    "commands/schedule-run.md",
+    "commands/schedule-logs.md",
+    "commands/schedule-history.md"
+  ],
+  "skills": [
+    "skills/SKILL.md"
+  ]
+}

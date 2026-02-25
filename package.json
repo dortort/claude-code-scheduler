@@ -1,0 +1,46 @@
+{
+  "name": "claude-code-scheduler",
+  "version": "0.1.0",
+  "description": "Claude Code plugin for scheduling recurring and one-time AI-assisted tasks using native OS schedulers",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist",
+    ".claude-plugin",
+    "commands",
+    "skills",
+    "templates",
+    "examples"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "scheduler",
+    "cron",
+    "automation",
+    "plugin"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "croner": "^8.1.2",
+    "cronstrue": "^2.52.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.2",
+    "vitest": "^3.0.0"
+  }
+}
