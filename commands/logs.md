@@ -1,32 +1,64 @@
 ---
 allowed-tools:
   - Read
-  - Glob
-  - Bash(node -e *)
+  - Bash(tail *)
+  - Bash(cat *)
 ---
 
 # /logs
 
 View stdout and stderr logs for a scheduled task.
 
+## Data Sources
+
+| Data | Path pattern |
+|------|--------------|
+| Global config | `~/.claude/schedules.json` |
+| Project config | `.claude/schedules.json` (optional) |
+| stdout log (macOS) | `~/.claude/logs/<taskId>.out.log` |
+| stderr log (macOS) | `~/.claude/logs/<taskId>.err.log` |
+| combined log (Linux) | `~/.claude/logs/<taskId>.log` |
+| status marker | `~/.claude/logs/<taskId>.status` |
+
+Config format:
+```json
+{ "version": 1, "tasks": [ { "id": "...", "name": "..." } ] }
+```
+
+Status marker content examples: `success`, `failure:exit-1`, `failure:timeout`
+
 ## Behavior
 
-1. Find the task using `findTask()` from `src/config.ts`:
-   - First tries exact ID match
-   - Falls back to case-insensitive name match
+### Step 1 — Find the task
 
-2. Determine log file paths using `getLogPaths()` from `src/logs/index.ts`:
-   - **macOS**: Separate `.out.log` (stdout) and `.err.log` (stderr) files
-   - **Linux**: Combined `.log` file
+Read `~/.claude/schedules.json` (and `.claude/schedules.json` if present) directly as JSON — no `node -e` needed.
+Match the user's input against task `id` (exact) or `name` (case-insensitive).
 
-3. Read and display the log contents:
-   - By default, show the last 50 lines
-   - If the user requests "full" or "all", show the complete log
-   - Show both stdout and stderr (separately labeled on macOS)
+If not found: `Task "<input>" not found. Run /scheduler:list to see available tasks.`
 
-4. Also show the status marker file content if it exists (`.status`).
+### Step 2 — Read logs in parallel
 
-5. If no logs exist, inform the user that the task hasn't been executed yet.
+With the resolved `<taskId>`, issue all reads simultaneously:
+
+**macOS:**
+1. `Bash: tail -50 ~/.claude/logs/<taskId>.out.log 2>/dev/null || echo NO_STDOUT`
+2. `Bash: tail -50 ~/.claude/logs/<taskId>.err.log 2>/dev/null || echo NO_STDERR`
+3. `Bash: cat ~/.claude/logs/<taskId>.status 2>/dev/null || echo NO_STATUS`
+
+**Linux:** replace steps 1+2 with:
+1. `Bash: tail -50 ~/.claude/logs/<taskId>.log 2>/dev/null || echo NO_LOG`
+
+If the user requests "full" or "all", use `cat` instead of `tail -50`.
+
+### Step 3 — Output
+
+Show task name and ID as a header, then:
+- **Status**: content of `.status` file (e.g. `success`, `failure:exit-1`, `failure:timeout`), or "not yet run"
+- **Output** (stdout): log content, or "No output yet"
+- **Errors** (stderr, macOS only): log content, or "No errors"
+
+If no log files exist at all:
+`No logs found for "<name>". The task may not have run yet.`
 
 ## Examples
 

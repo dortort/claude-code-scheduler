@@ -1,37 +1,63 @@
 ---
 allowed-tools:
-  - Read
-  - Glob
-  - Bash(node -e *)
+  - Bash(cat ~/.claude/execution-history.jsonl *)
+  - Bash(tail *)
 ---
 
 # /history
 
 View execution history for scheduled tasks.
 
+## Data Sources
+
+| Data | Path |
+|------|------|
+| Execution history | `~/.claude/execution-history.jsonl` |
+
+History record format (one JSON object per line):
+```json
+{ "taskId": "daily-review", "taskName": "Daily Review", "status": "success", "startedAt": "2024-01-01T09:00:00.000Z", "finishedAt": "2024-01-01T09:02:30.000Z", "exitCode": 0, "commitSha": null }
+```
+
+Fields: `taskId`, `taskName`, `status` (`success`|`failure`|`timeout`), `startedAt`, `finishedAt`, `exitCode` (optional), `commitSha` (optional — set when worktree mode produced a commit).
+
 ## Behavior
 
-1. Load execution history using `getRecentExecutions()` from `src/history/index.ts`.
+### Step 1 — Read history
 
-2. Apply filters based on user input:
-   - **Task ID or name**: Filter to a specific task
-   - **Status**: Filter by success/failure/timeout
-   - **Limit**: Number of records to show (default: 20)
+```bash
+cat ~/.claude/execution-history.jsonl 2>/dev/null || echo NO_HISTORY
+```
 
-3. For each execution record, display:
-   - **Task ID** and **name**
-   - **Started at**: Formatted timestamp
-   - **Duration**: Formatted duration (via `formatDuration()`)
-   - **Status**: success / failure / timeout
-   - **Exit code** (if applicable)
-   - **Commit SHA** (if worktree mode produced changes)
+### Step 2 — Empty state
 
-4. Show summary statistics:
-   - Total executions in the displayed period
-   - Success rate
-   - Average duration
+If the file doesn't exist or contains no valid records, output:
 
-5. If no history exists, inform the user that no tasks have been executed yet.
+```
+No execution history found.
+Tasks haven't been executed yet.
+```
+
+Then stop.
+
+### Step 3 — Apply filters from user input
+
+- **Task ID or name**: case-insensitive match on `taskId` or `taskName`
+- **Status filter**: `success`, `failure`, or `timeout`
+- **Limit**: default 20 most recent records
+
+### Step 4 — Output
+
+Sort records by `startedAt` descending (newest first). For each record display:
+- **Task**: name (ID)
+- **Started**: formatted timestamp + relative time (e.g. "3h ago")
+- **Duration**: `finishedAt − startedAt` formatted (e.g. "2m 30s")
+- **Status**: success / failure / timeout
+- **Exit code**: if present and non-zero
+- **Commit**: short SHA if present
+
+Show a summary line at the bottom:
+`X executions shown — Y% success rate — avg Zs duration`
 
 ## Examples
 

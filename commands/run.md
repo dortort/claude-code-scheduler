@@ -1,7 +1,6 @@
 ---
 allowed-tools:
   - Read
-  - Glob
   - Bash(node -e *)
   - Bash(/bin/bash *)
 ---
@@ -10,30 +9,78 @@ allowed-tools:
 
 Manually trigger a scheduled task for immediate execution.
 
+## Data Sources
+
+| Data | Path |
+|------|------|
+| Global config | `~/.claude/schedules.json` |
+| Project config | `.claude/schedules.json` (optional) |
+| Wrapper script | `~/.claude/logs/<taskId>.sh` |
+| Execution history | `~/.claude/execution-history.jsonl` |
+| stdout log | `~/.claude/logs/<taskId>.out.log` |
+| stderr log | `~/.claude/logs/<taskId>.err.log` |
+
+Config format:
+```json
+{ "version": 1, "tasks": [ { "id": "...", "name": "...", "execution": { "command": "...", "workingDirectory": "...", "timeout": 300 } } ] }
+```
+
 ## Behavior
 
-1. Find the task using `findTask()` from `src/config.ts`:
-   - First tries exact ID match
-   - Falls back to case-insensitive name match
+### Step 1 — Find the task
 
-2. Show the task details:
-   - Task name and ID
-   - Command that will be executed
-   - Working directory
-   - Timeout setting
+Read `~/.claude/schedules.json` (and `.claude/schedules.json` if present) directly as JSON — no `node -e` needed.
+Match input against task `id` (exact) or `name` (case-insensitive).
 
-3. On confirmation:
-   - Execute the wrapper script directly (bypassing the OS scheduler)
-   - Stream output in real-time if possible
-   - Record the execution in history using `recordExecution()` from `src/history/index.ts`
-   - Report the result (success/failure/timeout)
+If not found: `Task "<input>" not found. Run /scheduler:list to see available tasks.`
 
-4. If the task is not found, inform the user and suggest `/scheduler:list`.
+If wrapper script `~/.claude/logs/<taskId>.sh` does not exist:
+`Wrapper script missing for "<name>". Run /scheduler:add to recreate it.`
+
+### Step 2 — Confirm
+
+Show: task name, ID, command, working directory, timeout. Ask for confirmation.
+
+### Step 3 — Execute
+
+Note the start time, then run:
+
+```bash
+/bin/bash ~/.claude/logs/<taskId>.sh
+EXIT_CODE=$?
+```
+
+The wrapper script handles timeout enforcement, flock concurrency guard, and log writing.
+If the task is already running, it exits with: `Task <taskId> is already running, skipping.`
+
+### Step 4 — Record history
+
+```bash
+RECORD_JSON='{"taskId":"...","taskName":"...","status":"success","startedAt":"<ISO>","finishedAt":"<ISO>","exitCode":0}' \
+HISTORY_PATH=~/.claude/execution-history.jsonl \
+node -e "
+const { recordExecution } = require('./dist/history/index.js');
+const record = JSON.parse(process.env.RECORD_JSON);
+recordExecution(process.env.HISTORY_PATH, record).then(() => console.log('recorded'));
+"
+```
+
+Set `status` to `success` (exit 0), `failure` (non-zero exit), or `timeout` (if the wrapper timed out).
+
+### Step 5 — Report
+
+```
+Task "<name>" completed — <status> in <duration>
+
+Logs:
+  stdout: ~/.claude/logs/<taskId>.out.log
+  stderr: ~/.claude/logs/<taskId>.err.log
+```
 
 ## Important constraints
 
-- This runs the task's wrapper script, which includes timeout enforcement and concurrency guard.
-- If the task is already running (flock held), the execution will be skipped with a message.
+- This runs the wrapper script directly, bypassing the OS scheduler.
+- If the task is already running (flock held), execution is skipped automatically.
 
 ## Examples
 
