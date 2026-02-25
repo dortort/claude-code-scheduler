@@ -13,8 +13,6 @@ import {
   // Types
   createTask,
   createEmptyConfig,
-  type ScheduledTask,
-  type SchedulesConfig,
   type ExecutionHistoryRecord,
 
   // Config
