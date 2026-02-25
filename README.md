@@ -1,6 +1,10 @@
 # claude-code-scheduler
 
 [![CI](https://github.com/dortort/claude-code-scheduler/actions/workflows/ci.yml/badge.svg)](https://github.com/dortort/claude-code-scheduler/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/claude-code-scheduler)](https://www.npmjs.com/package/claude-code-scheduler)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Node.js](https://img.shields.io/node/v/claude-code-scheduler)](https://nodejs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue)](https://www.typescriptlang.org)
 
 A Claude Code plugin for scheduling recurring and one-time AI-assisted tasks using native OS schedulers (launchd on macOS, crontab on Linux).
 
