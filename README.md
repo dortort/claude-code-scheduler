@@ -94,7 +94,8 @@ Global config takes precedence on ID collision. Project configs cannot set `skip
 
 ```bash
 npm install
-npm test            # 258 tests
+npm test            # 258 unit/integration tests
+npm run test:e2e    # 9 E2E tests via Claude CLI subprocess (~9 min)
 npm run lint        # ESLint with typescript-eslint
 npm run typecheck   # Type checking only
 npm run build       # TypeScript compilation
@@ -102,6 +103,13 @@ npm run test:coverage  # Tests with coverage report
 ```
 
 CI runs automatically on every push and PR to `main` (lint, typecheck, test on Node 18+22, build).
+
+### Testing
+
+The test suite has two tiers:
+
+- **Unit/Integration** (`npm test`) — 258 fast tests covering library functions with no external dependencies.
+- **E2E** (`npm run test:e2e`) — 9 subprocess tests that invoke each plugin command through `claude --plugin-dir`. Requires the `claude` CLI to be installed and takes ~9 minutes. Skipped automatically if the CLI is not available. E2E tests use temp directories with fixture data and assert on output patterns (not exact strings) to handle Claude's non-deterministic phrasing.
 
 ### Releasing
 
