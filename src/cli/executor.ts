@@ -18,7 +18,7 @@ import crypto from 'node:crypto';
 
 import { loadConfig, findTask, getLogsDir, getHistoryPath } from '../config.js';
 import { recordExecution } from '../history/index.js';
-import { ensureLogsDir, getLogPaths } from '../logs/index.js';
+import { ensureLogsDir, getLogPaths, readLog } from '../logs/index.js';
 import {
   createWorktree,
   commitAndPush,
@@ -106,6 +106,7 @@ function spawnClaude(
     stdoutPath: string;
     stderrPath: string;
     timeout: number;
+    appendSystemPrompt?: string;
   },
 ): Promise<SpawnResult> {
   return new Promise((resolve) => {
@@ -113,6 +114,9 @@ function spawnClaude(
     const stderrStream = createWriteStream(options.stderrPath);
 
     const args = ['-p'];
+    if (options.appendSystemPrompt) {
+      args.push('--append-system-prompt', options.appendSystemPrompt);
+    }
     if (options.skipPermissions) {
       args.push('--dangerously-skip-permissions');
     }
@@ -161,6 +165,35 @@ async function writeStatus(logsDir: string, taskId: string, status: string): Pro
 
 // --- Direct Execution ---
 
+async function buildMemoryContext(
+  task: ScheduledTask,
+  stdoutPath: string,
+): Promise<string | undefined> {
+  const memory = task.execution.memory;
+  if (!memory?.enabled) return undefined;
+
+  const maxLines = memory.maxLines ?? 200;
+  const maxChars = memory.maxChars ?? 4000;
+
+  try {
+    const prevOutput = await readLog(stdoutPath, maxLines);
+    if (!prevOutput.trim()) return undefined;
+
+    const truncated = prevOutput.length > maxChars
+      ? '...(truncated)\n' + prevOutput.slice(-maxChars)
+      : prevOutput;
+
+    return (
+      '[SCHEDULER CONTEXT] This is a recurring scheduled task. ' +
+      'The output from your previous run is shown below. ' +
+      'Focus on new or changed items only. Do not re-report items from the previous output.\n\n' +
+      '--- Previous Run Output ---\n' + truncated + '\n--- End Previous Output ---'
+    );
+  } catch {
+    return undefined;
+  }
+}
+
 async function runDirect(
   task: ScheduledTask,
   logsDir: string,
@@ -169,6 +202,9 @@ async function runDirect(
   const stdoutPath = logPaths.stdout ?? logPaths.combined ?? path.join(logsDir, `${task.id}.out.log`);
   const stderrPath = logPaths.stderr ?? path.join(logsDir, `${task.id}.err.log`);
 
+  // Read previous output BEFORE createWriteStream truncates the file
+  const appendSystemPrompt = await buildMemoryContext(task, stdoutPath);
+
   return spawnClaude(task.execution.command, {
     cwd: task.execution.workingDirectory,
     skipPermissions: task.execution.skipPermissions,
@@ -176,6 +212,7 @@ async function runDirect(
     stdoutPath,
     stderrPath,
     timeout: task.execution.timeout,
+    appendSystemPrompt,
   });
 }
 
@@ -201,6 +238,9 @@ async function runWorktree(
     const stdoutPath = logPaths.stdout ?? logPaths.combined ?? path.join(logsDir, `${task.id}.out.log`);
     const stderrPath = logPaths.stderr ?? path.join(logsDir, `${task.id}.err.log`);
 
+    // Read previous output BEFORE createWriteStream truncates the file
+    const appendSystemPrompt = await buildMemoryContext(task, stdoutPath);
+
     const result = await spawnClaude(task.execution.command, {
       cwd: worktreePath,
       skipPermissions: task.execution.skipPermissions,
@@ -208,6 +248,7 @@ async function runWorktree(
       stdoutPath,
       stderrPath,
       timeout: task.execution.timeout,
+      appendSystemPrompt,
     });
 
     let pushed = false;

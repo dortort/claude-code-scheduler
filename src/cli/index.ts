@@ -60,6 +60,7 @@ async function main() {
             timeout: { type: 'string' },
             'skip-permissions': { type: 'boolean', default: false },
             description: { type: 'string' },
+            memory: { type: 'boolean', default: false },
           },
           strict: false,
         });
@@ -71,6 +72,7 @@ async function main() {
           timeout: values.timeout ? parseInt(values.timeout as string, 10) : undefined,
           skipPermissions: values['skip-permissions'] as boolean,
           description: values.description as string | undefined,
+          memory: values.memory as boolean,
         });
         console.log(JSON.stringify(result));
         process.exitCode = result.success ? 0 : 1;
@@ -104,6 +106,7 @@ async function main() {
             enabled: { type: 'string' },
             name: { type: 'string' },
             description: { type: 'string' },
+            memory: { type: 'string' },
           },
           strict: false,
         });
@@ -115,6 +118,7 @@ async function main() {
           enabled: values.enabled !== undefined ? values.enabled === 'true' : undefined,
           name: values.name as string | undefined,
           description: values.description as string | undefined,
+          memory: values.memory !== undefined ? values.memory === 'true' : undefined,
         });
         console.log(JSON.stringify(result));
         process.exitCode = result.success ? 0 : 1;

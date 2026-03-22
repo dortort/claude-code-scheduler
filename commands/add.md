@@ -23,6 +23,7 @@ From the user's input, determine:
 - **Working directory**: Defaults to the current project directory (resolved to absolute path)
 - **Timeout**: Defaults to 300 seconds
 - **skipPermissions**: Defaults to false. Only settable for global config tasks.
+- **Memory**: If the task is a recurring monitoring, checking, or alerting task (not a full report or summary), set `--memory` to enable run-to-run context. This injects the previous run's output so Claude focuses on new/changed items only. Show the inferred value in the confirmation table.
 
 ### Step 2 — Validate schedule and compute next runs
 
@@ -60,6 +61,7 @@ Command:          <prompt text>
 Working directory: <absolute path>
 Timeout:          <N>s
 Skip permissions: yes / no
+Memory:           yes / no (inferred from task type)
 
 Next 3 runs:
   1. <formatted date>
@@ -83,6 +85,7 @@ node ./dist/cli/index.js add \
 ```
 
 Add `--skip-permissions` if the user requested autonomous execution.
+Add `--memory` if the task benefits from run-to-run context (monitoring/checking tasks).
 Add `--description '<brief description>'` if appropriate.
 
 The CLI returns JSON: `{ "success": true, "task": { "id": "...", "name": "..." }, "configSaved": true, "osRegistered": true }`

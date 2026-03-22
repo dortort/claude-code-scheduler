@@ -20,6 +20,7 @@ export interface AddArgs {
   timeout?: number;
   skipPermissions?: boolean;
   description?: string;
+  memory?: boolean;
 }
 
 export interface AddResult {
@@ -60,6 +61,7 @@ export async function add(args: AddArgs): Promise<AddResult> {
       workingDirectory: args.workingDirectory,
       timeout: args.timeout ?? 300,
       skipPermissions: args.skipPermissions ?? false,
+      memory: args.memory ? { enabled: true } : undefined,
     },
   });
 

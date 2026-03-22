@@ -63,6 +63,12 @@ const WorktreeConfigSchema = z.object({
 
 // --- Execution Config ---
 
+const MemoryConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  maxLines: z.number().int().positive().default(200),
+  maxChars: z.number().int().positive().default(4000),
+});
+
 export const ExecutionConfigSchema = z.object({
   command: z.string().min(1, 'Command must not be empty'),
   workingDirectory: z.string().min(1),
@@ -73,6 +79,7 @@ export const ExecutionConfigSchema = z.object({
   ),
   skipPermissions: z.boolean().default(false),
   worktree: WorktreeConfigSchema.optional(),
+  memory: MemoryConfigSchema.optional(),
 });
 
 export type ExecutionConfig = z.infer<typeof ExecutionConfigSchema>;
@@ -160,6 +167,11 @@ export interface CreateTaskInput {
       branchPrefix?: string;
       remoteName?: string;
     };
+    memory?: {
+      enabled: boolean;
+      maxLines?: number;
+      maxChars?: number;
+    };
   };
   tags?: string[];
 }
@@ -186,6 +198,11 @@ export function createTask(input: CreateTaskInput): ScheduledTask {
         basePath: input.execution.worktree.basePath,
         branchPrefix: input.execution.worktree.branchPrefix ?? 'claude-task/',
         remoteName: input.execution.worktree.remoteName ?? 'origin',
+      } : undefined,
+      memory: input.execution.memory ? {
+        enabled: input.execution.memory.enabled,
+        maxLines: input.execution.memory.maxLines ?? 200,
+        maxChars: input.execution.memory.maxChars ?? 4000,
       } : undefined,
     },
     tags: input.tags ?? [],

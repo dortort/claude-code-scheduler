@@ -26,6 +26,7 @@ From the user's input, determine which fields to update:
 - **Timeout**: New timeout in seconds
 - **Name**: New task name
 - **Description**: New description
+- **Memory**: Enable or disable run-to-run context (`--memory true` or `--memory false`)
 
 If a new schedule is provided, validate it:
 

@@ -21,6 +21,7 @@ export interface UpdateArgs {
   enabled?: boolean;
   name?: string;
   description?: string;
+  memory?: boolean;
 }
 
 export interface UpdateResult {
@@ -65,11 +66,12 @@ export async function update(args: UpdateArgs): Promise<UpdateResult> {
     updates.trigger = { type: 'cron', expression: args.cron, timezone: existing.trigger.timezone };
   }
 
-  if (args.command !== undefined || args.timeout !== undefined) {
+  if (args.command !== undefined || args.timeout !== undefined || args.memory !== undefined) {
     updates.execution = {
       ...existing.execution,
       ...(args.command !== undefined ? { command: args.command } : {}),
       ...(args.timeout !== undefined ? { timeout: args.timeout } : {}),
+      ...(args.memory !== undefined ? { memory: { enabled: args.memory, maxLines: 200, maxChars: 4000 } } : {}),
     };
   }
 
