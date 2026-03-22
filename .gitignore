@@ -4,3 +4,5 @@ coverage/
 .omc/
 *.tgz
 .DS_Store
+.env
+.env.*
