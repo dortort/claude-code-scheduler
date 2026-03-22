@@ -22,7 +22,7 @@ From the user's input, determine:
 - **Command**: The natural-language prompt for Claude to execute (NOT a slash command)
 - **Working directory**: Defaults to the current project directory (resolved to absolute path)
 - **Timeout**: Defaults to 300 seconds
-- **skipPermissions**: Defaults to false. Only settable for global config tasks.
+- **skipPermissions**: Defaults to true for scheduled tasks (headless execution cannot prompt for permissions). Set to false only if the user explicitly requests permission checks. If set to false, show a warning in the confirmation step: "Note: this task may hang if it encounters a permission prompt during unattended execution."
 - **Memory**: If the task is a recurring monitoring, checking, or alerting task (not a full report or summary), set `--memory` to enable run-to-run context. This injects the previous run's output so Claude focuses on new/changed items only. Show the inferred value in the confirmation table.
 
 ### Step 2 — Validate schedule and compute next runs
