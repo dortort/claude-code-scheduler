@@ -42,6 +42,9 @@ const SHIM_TEMPLATE = `#!/bin/bash
 # Installed by: claude-scheduler init
 set -euo pipefail
 
+# Restore user PATH (launchd provides minimal PATH without node)
+export PATH="{{USER_PATH}}"
+
 EXECUTOR="{{EXECUTOR_PATH}}"
 if [ ! -f "$EXECUTOR" ]; then
   echo "Executor not found at $EXECUTOR. Run /scheduler:add to reinstall." >&2
@@ -62,8 +65,11 @@ export async function init(): Promise<InitResult> {
     const executorSource = getExecutorSourcePath();
     await fs.copyFile(executorSource, executorDest);
 
-    // Write bash shim
-    const shimContent = SHIM_TEMPLATE.replace('{{EXECUTOR_PATH}}', executorDest);
+    // Write bash shim with user's PATH embedded
+    const userPath = process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin';
+    const shimContent = SHIM_TEMPLATE
+      .replace('{{EXECUTOR_PATH}}', executorDest)
+      .replace('{{USER_PATH}}', userPath);
     await fs.writeFile(shimDest, shimContent, { mode: 0o755 });
 
     return { success: true, executorPath: executorDest, shimPath: shimDest };
