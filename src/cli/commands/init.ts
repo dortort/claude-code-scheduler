@@ -20,21 +20,11 @@ function getBinDir(): string {
 }
 
 export function getExecutorPath(): string {
-  return path.join(getBinDir(), 'claude-scheduler-executor.js');
+  return resolveExecutorInPlace();
 }
 
 export function getShimPath(): string {
   return path.join(getBinDir(), 'claude-scheduler-run');
-}
-
-/**
- * Find the executor source file relative to this module.
- * Works whether invoked from src/ or dist/.
- */
-function getExecutorSourcePath(): string {
-  // This file is at src/cli/commands/init.ts or dist/cli/commands/init.js
-  // Executor is at src/cli/executor.ts or dist/cli/executor.js
-  return path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', 'executor.js');
 }
 
 const SHIM_TEMPLATE = `#!/bin/bash
@@ -53,17 +43,26 @@ fi
 exec {{NODE_PATH}} "$EXECUTOR" "$@"
 `;
 
+/**
+ * Find the executor source in the plugin cache or local dist.
+ * Returns the absolute path to executor.js that has valid relative imports.
+ */
+function resolveExecutorInPlace(): string {
+  // This file is at dist/cli/commands/init.js (or src/cli/commands/init.ts)
+  // The executor is at dist/cli/executor.js (sibling directory)
+  const fromModule = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', 'executor.js');
+  return fromModule;
+}
+
 export async function init(): Promise<InitResult> {
   const binDir = getBinDir();
-  const executorDest = getExecutorPath();
   const shimDest = getShimPath();
+
+  // Resolve executor in place (keeps relative imports intact)
+  const executorPath = resolveExecutorInPlace();
 
   try {
     await fs.mkdir(binDir, { recursive: true });
-
-    // Copy executor source to stable path
-    const executorSource = getExecutorSourcePath();
-    await fs.copyFile(executorSource, executorDest);
 
     // Resolve absolute path to node (eliminates PATH dependency for shim startup)
     const nodePath = process.execPath;
@@ -71,16 +70,16 @@ export async function init(): Promise<InitResult> {
     // Write bash shim with absolute node path and user's PATH embedded
     const userPath = process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin';
     const shimContent = SHIM_TEMPLATE
-      .replace('{{EXECUTOR_PATH}}', executorDest)
+      .replace('{{EXECUTOR_PATH}}', executorPath)
       .replace('{{NODE_PATH}}', nodePath)
       .replace('{{USER_PATH}}', userPath);
     await fs.writeFile(shimDest, shimContent, { mode: 0o755 });
 
-    return { success: true, executorPath: executorDest, shimPath: shimDest };
+    return { success: true, executorPath, shimPath: shimDest };
   } catch (err) {
     return {
       success: false,
-      executorPath: executorDest,
+      executorPath,
       shimPath: shimDest,
       error: (err as Error).message,
     };
@@ -92,7 +91,6 @@ export async function init(): Promise<InitResult> {
  */
 export async function isExecutorInstalled(): Promise<boolean> {
   try {
-    await fs.access(getExecutorPath());
     await fs.access(getShimPath());
     return true;
   } catch {
