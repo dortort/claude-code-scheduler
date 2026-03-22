@@ -60,12 +60,16 @@ export async function loadConfig(filePath: string): Promise<SchedulesConfig> {
 
 /**
  * Save config to a file path. Validates before writing. Creates parent dirs if needed.
+ * Uses temp-file-then-rename for atomic writes (no partial writes on crash).
  */
 export async function saveConfig(filePath: string, config: SchedulesConfig): Promise<void> {
   // Validate before writing
   SchedulesConfigSchema.parse(config);
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(config, null, 2), 'utf-8');
+  const dir = path.dirname(filePath);
+  await fs.mkdir(dir, { recursive: true });
+  const tmpPath = path.join(dir, `.schedules.${process.pid}.tmp`);
+  await fs.writeFile(tmpPath, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+  await fs.rename(tmpPath, filePath);
 }
 
 // --- Merge ---
