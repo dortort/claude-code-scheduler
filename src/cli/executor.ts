@@ -10,6 +10,7 @@
  */
 
 import { spawn } from 'node:child_process';
+import { createWriteStream } from 'node:fs';
 import { mkdir, rm, readFile, writeFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -108,7 +109,6 @@ function spawnClaude(
   },
 ): Promise<SpawnResult> {
   return new Promise((resolve) => {
-    const { createWriteStream } = require('node:fs') as typeof import('node:fs');
     const stdoutStream = createWriteStream(options.stdoutPath);
     const stderrStream = createWriteStream(options.stderrPath);
 

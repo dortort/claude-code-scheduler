@@ -120,7 +120,7 @@ async function registerLinux(task: ScheduledTask, shimPath: string): Promise<voi
 }
 
 async function unregisterLinux(taskId: string): Promise<void> {
-  let existingCrontab = '';
+  let existingCrontab: string;
   try {
     const result = await defaultExec('crontab', ['-l']);
     existingCrontab = result.stdout;
