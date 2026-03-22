@@ -9,6 +9,7 @@ import type { SchedulerTask } from './base.js';
 
 export interface DarwinSchedulerTask extends SchedulerTask {
   wrapperScriptPath: string;
+  programArgs?: string[];
   runAtLoad?: boolean;
 }
 
@@ -209,10 +210,12 @@ ${intervalXml}
   <key>Label</key>
   <string>${xmlEscape(label)}</string>
   <key>ProgramArguments</key>
-  <array>
+  ${task.programArgs
+    ? `<array>\n${task.programArgs.map(a => `    <string>${xmlEscape(a)}</string>`).join('\n')}\n  </array>`
+    : `<array>
     <string>/bin/bash</string>
     <string>${escapedScript}</string>
-  </array>
+  </array>`}
   <key>StandardOutPath</key>
   <string>${outLog}</string>
   <key>StandardErrorPath</key>

@@ -59,6 +59,7 @@ async function registerDarwin(task: ScheduledTask, shimPath: string): Promise<vo
     logsDir,
     userPath: process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin',
     wrapperScriptPath: shimPath,
+    programArgs: ['/bin/bash', shimPath, task.id],
     cronExpression: cronExpr,
     runAtLoad: task.trigger.type === 'once',
   };

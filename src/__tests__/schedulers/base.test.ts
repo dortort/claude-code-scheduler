@@ -18,16 +18,15 @@ const sampleTask: SchedulerTask = {
 };
 
 describe('getExecutionCommand', () => {
-  it('returns path to wrapper script', () => {
+  it('returns shared executor shim path with task ID', () => {
     const cmd = getExecutionCommand(sampleTask);
     expect(cmd).toContain('daily-review');
-    expect(cmd).toContain('.sh');
+    expect(cmd).toContain('claude-scheduler-run');
   });
 
-  it('uses logsDir as base for wrapper script location', () => {
+  it('uses ~/.claude/bin/ as base for executor location', () => {
     const cmd = getExecutionCommand(sampleTask);
-    // Wrapper scripts live alongside logs
-    expect(cmd).toContain('/home/user/.claude/logs');
+    expect(cmd).toContain('.claude/bin/claude-scheduler-run');
   });
 });
 
