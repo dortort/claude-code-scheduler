@@ -71,13 +71,12 @@ export {
   generateBranchName,
 } from './vcs/index.js';
 
-// Wrapper script generation
-export {
-  generateDirectWrapper,
-  generateWorktreeWrapper,
-  type WrapperOptions,
-  type WorktreeWrapperOptions,
-} from './templates/wrapper.js';
+// Shared executor
+export { run as runTask } from './cli/executor.js';
+
+// CLI commands
+export { init, ensureExecutorInstalled, getShimPath, getExecutorPath } from './cli/commands/init.js';
+export { registerTask, unregisterTask } from './cli/platform.js';
 
 // Platform schedulers
 export {

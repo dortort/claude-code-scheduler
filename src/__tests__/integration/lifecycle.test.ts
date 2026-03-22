@@ -43,9 +43,6 @@ import {
   // VCS
   isSensitiveFile,
 
-  // Templates
-  generateDirectWrapper,
-
   // Schedulers
   getSchedulerForPlatform,
   PlatformNotSupportedError,
@@ -111,26 +108,12 @@ describe('Task Lifecycle Integration', () => {
     const nextRuns = getNextRuns('0 9 * * *', 3);
     expect(nextRuns).toHaveLength(3);
 
-    // 7. Generate wrapper script
-    const wrapper = generateDirectWrapper({
-      taskId: task.id,
-      taskName: task.name,
-      command: task.execution.command,
-      workingDirectory: task.execution.workingDirectory,
-      timeout: task.execution.timeout,
-      skipPermissions: false,
-      logsDir,
-      userPath: '/usr/local/bin:/usr/bin:/bin',
-    });
-    expect(wrapper).toContain('#!/bin/bash');
-    expect(wrapper).toContain(task.id);
+    // 7. Verify shared executor module is importable
+    const { run } = await import('../../cli/executor.js');
+    expect(typeof run).toBe('function');
 
-    // 8. Write wrapper script to disk
+    // 8. Ensure logs directory exists
     await ensureLogsDir(logsDir);
-    const wrapperPath = path.join(logsDir, `${task.id}.sh`);
-    await fs.writeFile(wrapperPath, wrapper, { mode: 0o755 });
-    const wrapperStat = await fs.stat(wrapperPath);
-    expect(wrapperStat.isFile()).toBe(true);
 
     // 9. Simulate execution logging
     const logPaths = getLogPaths(logsDir, task.id, 'darwin');
