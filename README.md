@@ -15,6 +15,8 @@ A Claude Code plugin for scheduling recurring and one-time AI-assisted tasks usi
 - **Worktree isolation** — run tasks in isolated git worktrees to avoid interfering with your working copy
 - **Execution history** — JSONL-based history with filtering by status, task, and project
 - **Log management** — stdout/stderr capture with rotation and cleanup
+- **Run-to-run memory** — optional context injection from previous output so recurring tasks focus on new/changed items
+- **Shared executor** — single Node.js executor for all tasks, reading config at runtime (no per-task wrapper scripts)
 - **Security built-in** — env blocklist, sensitive file detection, shell escaping, trust boundary enforcement
 
 ## Requirements
@@ -43,7 +45,10 @@ claude --plugin-dir /path/to/claude-code-scheduler
 |---------|-------------|
 | `/scheduler:add` | Add a new scheduled task (NL or cron) |
 | `/scheduler:list` | List all configured tasks with status |
+| `/scheduler:edit` | Modify a task's schedule, command, or settings |
 | `/scheduler:remove` | Remove a task by ID or name |
+| `/scheduler:enable` | Enable a disabled task |
+| `/scheduler:disable` | Disable a task without removing it |
 | `/scheduler:status` | Health check for the scheduling system |
 | `/scheduler:run` | Manually trigger a task |
 | `/scheduler:logs` | View stdout/stderr logs for a task |
@@ -60,6 +65,11 @@ src/
   types.ts              Zod schemas, task factory, validation
   config.ts             Config load/save/merge with trust boundaries
   index.ts              Public API re-exports
+  cli/
+    executor.ts         Shared task executor (direct + worktree modes)
+    index.ts            CLI entry point (add, remove, update, sync, init, migrate)
+    platform.ts         Platform-aware OS scheduler registration
+    commands/            CLI subcommands (add, remove, update, sync, init, migrate)
   cron/
     parser.ts           Cron validation, NL-to-cron, next runs
     humanizer.ts        Cron-to-human-readable, date/duration formatting
@@ -69,8 +79,6 @@ src/
     index.ts            JSONL execution history, querying, cleanup
   vcs/
     index.ts            Git worktree lifecycle, sensitive file detection
-  templates/
-    wrapper.ts          Bash wrapper script generation (direct + worktree)
   schedulers/
     base.ts             Shared scheduler utilities
     darwin.ts           macOS launchd plist generation
@@ -94,8 +102,8 @@ Global config takes precedence on ID collision. Project configs cannot set `skip
 
 ```bash
 npm install
-npm test            # 258 unit/integration tests
-npm run test:e2e    # 9 E2E tests via Claude CLI subprocess (~9 min)
+npm test            # Unit/integration tests
+npm run test:e2e    # E2E tests via Claude CLI subprocess (~9 min)
 npm run lint        # ESLint with typescript-eslint
 npm run typecheck   # Type checking only
 npm run build       # TypeScript compilation
@@ -108,8 +116,8 @@ CI runs automatically on every push and PR to `main` (lint, typecheck, test on N
 
 The test suite has two tiers:
 
-- **Unit/Integration** (`npm test`) — 258 fast tests covering library functions with no external dependencies.
-- **E2E** (`npm run test:e2e`) — 9 subprocess tests that invoke each plugin command through `claude --plugin-dir`. Requires the `claude` CLI to be installed and takes ~9 minutes. Skipped automatically if the CLI is not available. E2E tests use temp directories with fixture data and assert on output patterns (not exact strings) to handle Claude's non-deterministic phrasing.
+- **Unit/Integration** (`npm test`) — fast tests covering library functions with no external dependencies.
+- **E2E** (`npm run test:e2e`) — subprocess tests that invoke each plugin command through `claude --plugin-dir`. Requires the `claude` CLI to be installed and takes ~9 minutes. Skipped automatically if the CLI is not available. E2E tests use temp directories with fixture data and assert on output patterns (not exact strings) to handle Claude's non-deterministic phrasing.
 
 ### Releasing
 
