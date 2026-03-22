@@ -1,7 +1,8 @@
 /**
- * Init command: installs the shared executor to a stable path.
- * Copies executor.js to ~/.claude/bin/claude-scheduler-executor.js
- * and writes a bash shim to ~/.claude/bin/claude-scheduler-run.
+ * Init command: writes the executor shim to ~/.claude/bin/claude-scheduler-run.
+ * The shim embeds absolute paths to node and the executor, so it works
+ * under launchd's minimal PATH. Re-running init is always safe and
+ * updates the shim to match the current plugin cache and node location.
  */
 
 import fs from 'node:fs/promises';
@@ -87,23 +88,11 @@ export async function init(): Promise<InitResult> {
 }
 
 /**
- * Check if the executor is installed. Returns true if both files exist.
- */
-export async function isExecutorInstalled(): Promise<boolean> {
-  try {
-    await fs.access(getShimPath());
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Ensure the executor is installed. Runs init if not.
+ * Ensure the executor shim is installed and up to date.
+ * Always re-runs init to refresh the shim with current paths.
+ * This handles plugin upgrades (cache path changes) and node
+ * version changes transparently.
  */
 export async function ensureExecutorInstalled(): Promise<InitResult> {
-  if (await isExecutorInstalled()) {
-    return { success: true, executorPath: getExecutorPath(), shimPath: getShimPath() };
-  }
   return init();
 }
