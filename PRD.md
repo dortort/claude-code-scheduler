@@ -98,7 +98,7 @@ User: "schedule a daily code review at 9am"
 **Worktree Execution Flow:**
 ```
 OS scheduler triggers wrapper script
-  -> flock concurrency guard (skip if already running)
+  -> mkdir-based concurrency guard (skip if already running)
   -> Create worktree: git worktree add <path> -b <branchPrefix><shortId>-<timestamp>
   -> cd <worktree>
   -> Execute: claude -p '<prompt>' [--dangerously-skip-permissions]
@@ -232,7 +232,7 @@ Each task gets a generated bash wrapper script that handles:
 
 1. **PATH restoration** - Embeds the user's PATH captured at registration time
 2. **Working directory** - `cd` to the absolute working directory
-3. **Concurrency guard** - `flock -n` prevents parallel execution of the same task
+3. **Concurrency guard** - `mkdir`-based locking prevents parallel execution of the same task
 4. **Timeout enforcement** - Background process with kill after timeout + grace period
 5. **Claude invocation** - `claude -p '<escaped-prompt>'` with optional `--dangerously-skip-permissions`
 6. **Log routing** - stdout and stderr to separate files
@@ -264,7 +264,7 @@ Each task gets a generated bash wrapper script that handles:
 | NFR-R2 | Log rotation to prevent disk exhaustion | P1 | Done |
 | NFR-R3 | History cleanup based on configurable retention | P1 | Done |
 | NFR-R4 | Worktree removal retries once after 500ms (handles file lock races) | P1 | Done |
-| NFR-R5 | flock concurrency guard prevents duplicate executions | P0 | Done |
+| NFR-R5 | mkdir-based concurrency guard prevents duplicate executions | P0 | Done |
 
 ### 3.3 Compatibility
 
@@ -345,7 +345,7 @@ SchedulesConfig (1) ──── has many ──── ScheduledTask (N)
 - Core scheduling (cron + natural language + one-time triggers)
 - macOS (launchd) and Linux (crontab) scheduler integration
 - Worktree isolation with `git add -u` and sensitive file detection
-- Execution wrapper with timeout, flock concurrency guard, logging
+- Execution wrapper with timeout, mkdir-based concurrency guard, logging
 - Configuration with trust boundary enforcement
 - Execution history (append-only JSONL)
 - 7 slash commands + 1 NL skill
@@ -408,7 +408,7 @@ SchedulesConfig (1) ──── has many ──── ScheduledTask (N)
 | D8 | Error handling | Plain Error + Zod | No custom error hierarchy |
 | D9 | Config merge | Global wins on ID collision | Project configs add-only |
 | D10 | Security | Built-in per phase | Not a separate hardening phase |
-| D11 | Concurrency | `flock` in wrapper script | Prevents parallel execution |
+| D11 | Concurrency | `mkdir`-based lock in wrapper script | Prevents parallel execution |
 | D12 | Testability | Dependency injection for exec | Tests inject mock exec |
 | D13 | Working directory | Resolve to absolute at creation | Store absolute path |
 | D14 | Git staging | `git add -u` (not `-A`) | Avoids staging secrets |
@@ -424,8 +424,8 @@ SchedulesConfig (1) ──── has many ──── ScheduledTask (N)
 | **Trigger** | When a task should fire -- `cron` (recurring) or `once` (one-time) |
 | **Execution** | What happens when a task fires (prompt, working directory, permissions) |
 | **Worktree** | An isolated git working directory on a separate branch |
-| **Wrapper script** | Generated bash script that handles PATH, timeout, flock, logging, and Claude invocation |
+| **Wrapper script** | Generated bash script that handles PATH, timeout, locking, logging, and Claude invocation |
 | **skipPermissions** | Flag that enables fully autonomous Claude execution (`--dangerously-skip-permissions`) |
 | **CalendarInterval** | launchd's cron equivalent; specifies Minute/Hour/Day/Month/Weekday in a plist dict |
 | **Marker comment** | Comment block `# claude-scheduler:<id>:begin/end` used to identify crontab entries |
-| **flock** | POSIX file locking used as a concurrency guard (one execution per task at a time) |
+| **mkdir lock** | Portable directory-based locking used as a concurrency guard (one execution per task at a time) |

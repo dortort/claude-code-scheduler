@@ -3,7 +3,7 @@
  * Produces self-contained wrapper scripts that handle:
  * - PATH restoration, working directory
  * - Timeout enforcement with SIGTERM/SIGKILL
- * - flock-based concurrency guard (one execution per task)
+ * - mkdir-based concurrency guard (one execution per task)
  * - Log file routing (stdout, stderr, status marker)
  * - Claude CLI invocation with proper escaping
  */
@@ -64,16 +64,32 @@ mkdir -p ${shellEscape(logsDir)}
 # Change to working directory
 cd ${shellEscape(workingDirectory)}
 
-# Concurrency guard: only one execution per task at a time
+# Concurrency guard: only one execution per task at a time (mkdir-based, portable)
 LOCKFILE=${shellEscape(lockFile)}
-exec 200>"$LOCKFILE"
-if ! flock -n 200; then
-  echo "Task ${taskId} is already running, skipping." >&2
-  exit 0
-fi
-
-# Timeout enforcement
 TIMEOUT=${timeout}
+
+# Portable stat: Linux syntax first (GNU stat -f returns filesystem info, not file mtime)
+file_mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null; }
+
+if ! mkdir "$LOCKFILE" 2>/dev/null; then
+  if [ -d "$LOCKFILE" ]; then
+    LOCK_AGE=$(( $(date +%s) - $(file_mtime "$LOCKFILE") ))
+    if [ "$LOCK_AGE" -gt $(( TIMEOUT + 60 )) ]; then
+      LOCK_PID=$(cat "$LOCKFILE/pid" 2>/dev/null)
+      if [ -n "$LOCK_PID" ] && kill -0 "$LOCK_PID" 2>/dev/null; then
+        echo "Task ${taskId} still running (PID $LOCK_PID), skipping." >&2
+        exit 0
+      fi
+      rm -rf "$LOCKFILE"
+      mkdir "$LOCKFILE" 2>/dev/null || { echo "Task ${taskId} already running, skipping." >&2; exit 0; }
+    else
+      echo "Task ${taskId} already running, skipping." >&2
+      exit 0
+    fi
+  fi
+fi
+echo $$ > "$LOCKFILE/pid"
+
 CLAUDE_PID=""
 
 cleanup() {
@@ -82,6 +98,7 @@ cleanup() {
     sleep 5
     kill -KILL "$CLAUDE_PID" 2>/dev/null || true
   fi
+  rm -rf "$LOCKFILE"
 }
 trap cleanup EXIT INT TERM
 
@@ -173,23 +190,40 @@ export PATH="${userPath}"
 # Ensure logs directory exists
 mkdir -p ${shellEscape(logsDir)}
 
-# Concurrency guard: only one execution per task at a time
+# Concurrency guard: only one execution per task at a time (mkdir-based, portable)
 LOCKFILE=${shellEscape(lockFile)}
-exec 200>"$LOCKFILE"
-if ! flock -n 200; then
-  echo "Task ${taskId} is already running, skipping." >&2
-  exit 0
+TIMEOUT=${timeout}
+
+# Portable stat: Linux syntax first (GNU stat -f returns filesystem info, not file mtime)
+file_mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null; }
+
+if ! mkdir "$LOCKFILE" 2>/dev/null; then
+  if [ -d "$LOCKFILE" ]; then
+    LOCK_AGE=$(( $(date +%s) - $(file_mtime "$LOCKFILE") ))
+    if [ "$LOCK_AGE" -gt $(( TIMEOUT + 60 )) ]; then
+      LOCK_PID=$(cat "$LOCKFILE/pid" 2>/dev/null)
+      if [ -n "$LOCK_PID" ] && kill -0 "$LOCK_PID" 2>/dev/null; then
+        echo "Task ${taskId} still running (PID $LOCK_PID), skipping." >&2
+        exit 0
+      fi
+      rm -rf "$LOCKFILE"
+      mkdir "$LOCKFILE" 2>/dev/null || { echo "Task ${taskId} already running, skipping." >&2; exit 0; }
+    else
+      echo "Task ${taskId} already running, skipping." >&2
+      exit 0
+    fi
+  fi
 fi
+echo $$ > "$LOCKFILE/pid"
 
 # Worktree setup
 REPO_PATH=${shellEscape(repoPath)}
 BRANCH_NAME="${branchName}"
 WORKTREE_DIR="${worktreeDir}"
 REMOTE=${escapedRemote}
-TIMEOUT=${timeout}
 CLAUDE_PID=""
 
-# Cleanup handler - remove worktree on exit
+# Cleanup handler - remove worktree and lock on exit
 cleanup() {
   if [ -n "$CLAUDE_PID" ] && kill -0 "$CLAUDE_PID" 2>/dev/null; then
     kill -TERM "$CLAUDE_PID" 2>/dev/null || true
@@ -200,6 +234,7 @@ cleanup() {
     cd "$REPO_PATH"
     git worktree remove "$WORKTREE_DIR" --force 2>/dev/null || true
   fi
+  rm -rf "$LOCKFILE"
 }
 trap cleanup EXIT INT TERM
 

@@ -40,10 +40,27 @@ describe('generateDirectWrapper', () => {
     expect(script).toMatch(/timeout|kill/);
   });
 
-  it('includes flock concurrency guard', () => {
+  it('includes mkdir-based concurrency guard', () => {
     const script = generateDirectWrapper(baseOptions);
-    expect(script).toContain('flock');
+    expect(script).toContain('mkdir "$LOCKFILE"');
     expect(script).toContain('task-abc123');
+  });
+
+  it('includes cross-platform stat for stale lock detection', () => {
+    const script = generateDirectWrapper(baseOptions);
+    expect(script).toContain('stat -c %Y');
+    expect(script).toContain('stat -f %m');
+    expect(script).toContain('LOCK_AGE');
+  });
+
+  it('writes PID file after acquiring lock', () => {
+    const script = generateDirectWrapper(baseOptions);
+    expect(script).toContain('echo $$ > "$LOCKFILE/pid"');
+  });
+
+  it('removes lock directory in cleanup trap', () => {
+    const script = generateDirectWrapper(baseOptions);
+    expect(script).toMatch(/cleanup\(\)[\s\S]*?rm -rf "\$LOCKFILE"/);
   });
 
   it('invokes claude -p with escaped command', () => {
@@ -146,9 +163,20 @@ describe('generateWorktreeWrapper', () => {
     expect(script).toContain('trap');
   });
 
-  it('includes flock concurrency guard', () => {
+  it('includes mkdir-based concurrency guard', () => {
     const script = generateWorktreeWrapper(worktreeOptions);
-    expect(script).toContain('flock');
+    expect(script).toContain('mkdir "$LOCKFILE"');
+  });
+
+  it('includes cross-platform stat for stale lock detection', () => {
+    const script = generateWorktreeWrapper(worktreeOptions);
+    expect(script).toContain('stat -c %Y');
+    expect(script).toContain('stat -f %m');
+  });
+
+  it('removes lock directory in cleanup trap', () => {
+    const script = generateWorktreeWrapper(worktreeOptions);
+    expect(script).toMatch(/cleanup\(\)[\s\S]*?rm -rf "\$LOCKFILE"/);
   });
 
   it('includes timeout enforcement', () => {

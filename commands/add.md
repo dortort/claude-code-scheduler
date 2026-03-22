@@ -171,13 +171,30 @@ mkdir -p '<logsDir>'
 cd '<workingDirectory>'
 
 LOCKFILE='/tmp/claude-scheduler-<taskId>.lock'
-exec 200>"$LOCKFILE"
-if ! flock -n 200; then
-  echo "Task <taskId> is already running, skipping." >&2
-  exit 0
-fi
-
 TIMEOUT=<timeout>
+
+# Portable stat: Linux syntax first (GNU stat -f returns filesystem info, not file mtime)
+file_mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null; }
+
+if ! mkdir "$LOCKFILE" 2>/dev/null; then
+  if [ -d "$LOCKFILE" ]; then
+    LOCK_AGE=$(( $(date +%s) - $(file_mtime "$LOCKFILE") ))
+    if [ "$LOCK_AGE" -gt $(( TIMEOUT + 60 )) ]; then
+      LOCK_PID=$(cat "$LOCKFILE/pid" 2>/dev/null)
+      if [ -n "$LOCK_PID" ] && kill -0 "$LOCK_PID" 2>/dev/null; then
+        echo "Task <taskId> still running (PID $LOCK_PID), skipping." >&2
+        exit 0
+      fi
+      rm -rf "$LOCKFILE"
+      mkdir "$LOCKFILE" 2>/dev/null || { echo "Task <taskId> already running, skipping." >&2; exit 0; }
+    else
+      echo "Task <taskId> already running, skipping." >&2
+      exit 0
+    fi
+  fi
+fi
+echo $$ > "$LOCKFILE/pid"
+
 CLAUDE_PID=""
 
 cleanup() {
@@ -186,6 +203,7 @@ cleanup() {
     sleep 5
     kill -KILL "$CLAUDE_PID" 2>/dev/null || true
   fi
+  rm -rf "$LOCKFILE"
 }
 trap cleanup EXIT INT TERM
 

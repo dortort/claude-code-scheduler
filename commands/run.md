@@ -50,7 +50,7 @@ Note the start time, then run:
 EXIT_CODE=$?
 ```
 
-The wrapper script handles timeout enforcement, flock concurrency guard, and log writing.
+The wrapper script handles timeout enforcement, mkdir-based concurrency guard, and log writing.
 If the task is already running, it exits with: `Task <taskId> is already running, skipping.`
 
 ### Step 4 — Record history
@@ -80,7 +80,7 @@ Logs:
 ## Important constraints
 
 - This runs the wrapper script directly, bypassing the OS scheduler.
-- If the task is already running (flock held), execution is skipped automatically.
+- If the task is already running (lock held), execution is skipped automatically.
 
 ## Examples
 

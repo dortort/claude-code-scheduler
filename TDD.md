@@ -53,7 +53,7 @@
 │                           │                                      │
 │                           ▼                                      │
 │              /bin/bash ~/.claude/logs/<id>.sh                    │
-│              (generated wrapper script with flock, timeout, etc.) │
+│              (generated wrapper script with mkdir lock, timeout, etc.) │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -254,7 +254,7 @@ Non-worktree execution. Script includes:
 2. `export PATH="<captured-user-path>"`
 3. `mkdir -p <logsDir>`
 4. `cd <workingDirectory>` (shell-escaped)
-5. `flock -n` on `/tmp/claude-scheduler-<taskId>.lock`
+5. `mkdir` lock on `/tmp/claude-scheduler-<taskId>.lock`
 6. `claude -p <escaped-command> [--dangerously-skip-permissions]` as background process
 7. Timeout enforcement via polling loop + `kill -TERM` / `kill -KILL`
 8. stdout/stderr redirection to `.out.log` / `.err.log`
@@ -381,7 +381,7 @@ Layer 3: Trust Boundary Enforcement
 Layer 4: Safe Git Operations
   - git add -u (not -A), sensitive file pattern detection
 Layer 5: Execution Isolation
-  - flock concurrency guard, timeout with SIGTERM/SIGKILL
+  - mkdir-based concurrency guard, timeout with SIGTERM/SIGKILL
   - Worktree isolation for automated changes
 Layer 6: Claude Code Permission System
   - --dangerously-skip-permissions is opt-in, global-only
