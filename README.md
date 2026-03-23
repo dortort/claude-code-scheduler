@@ -1,11 +1,17 @@
-# @dortort/scheduler
+<p align="center">
+  <img src="assets/logo.png" alt="Scheduler logo" width="180" />
+</p>
 
-[![CI](https://github.com/dortort/claude-code-scheduler/actions/workflows/ci.yml/badge.svg)](https://github.com/dortort/claude-code-scheduler/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Node.js >= 18](https://img.shields.io/badge/Node.js-%3E%3D18-green)](https://nodejs.org)
-[![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue)](https://www.typescriptlang.org)
+<h1 align="center">@dortort/scheduler</h1>
 
-A Claude Code plugin for scheduling recurring and one-time AI-assisted tasks using native OS schedulers (launchd on macOS, crontab on Linux).
+<p align="center">
+  <a href="https://github.com/dortort/claude-code-scheduler/actions/workflows/ci.yml"><img src="https://github.com/dortort/claude-code-scheduler/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="https://nodejs.org"><img src="https://img.shields.io/badge/Node.js-%3E%3D18-green" alt="Node.js >= 18"></a>
+  <a href="https://www.typescriptlang.org"><img src="https://img.shields.io/badge/TypeScript-strict-blue" alt="TypeScript"></a>
+</p>
+
+<p align="center">A Claude Code plugin for scheduling recurring and one-time AI-assisted tasks using native OS schedulers (launchd on macOS, crontab on Linux).</p>
 
 ## Features
 
@@ -134,6 +140,22 @@ Enable branch protection on `main` requiring these status checks to pass:
 - Test (Node 18)
 - Test (Node 22)
 - Build
+
+## Contributing
+
+1. Fork the repo and create a feature branch from `main`
+2. Install dependencies: `npm install`
+3. Make your changes — the project uses TypeScript in strict mode with ESLint
+4. Run checks before submitting:
+   ```bash
+   npm run lint        # ESLint
+   npm run typecheck   # TypeScript
+   npm test            # Unit/integration tests
+   npm run build       # Compilation
+   ```
+5. Open a pull request against `main`
+
+For project context, see [PRD.md](PRD.md) (product requirements) and [TDD.md](TDD.md) (test strategy).
 
 ## License
 
