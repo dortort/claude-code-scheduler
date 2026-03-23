@@ -1,28 +1,30 @@
 <p align="center">
-  <img src="assets/logo.png" alt="Scheduler logo" width="180" />
+  <img src="assets/logo.png" alt="Scheduler logo" width="140" />
 </p>
-
 <h1 align="center">@dortort/scheduler</h1>
-
 <p align="center">
   <a href="https://github.com/dortort/claude-code-scheduler/actions/workflows/ci.yml"><img src="https://github.com/dortort/claude-code-scheduler/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://nodejs.org"><img src="https://img.shields.io/badge/Node.js-%3E%3D18-green" alt="Node.js >= 18"></a>
   <a href="https://www.typescriptlang.org"><img src="https://img.shields.io/badge/TypeScript-strict-blue" alt="TypeScript"></a>
 </p>
-
-<p align="center">A Claude Code plugin for scheduling recurring and one-time AI-assisted tasks using native OS schedulers (launchd on macOS, crontab on Linux).</p>
+<p align="center">Schedule recurring and one-time AI tasks with Claude Code — powered by native OS schedulers (launchd / crontab).</p>
 
 ## Features
 
-- **Natural language scheduling** — "every weekday at 9am", "daily at 5pm", "every Monday at 10am"
+**Scheduling**
+- **Natural language** — "every weekday at 9am", "daily at 5pm", "every Monday at 10am"
 - **Cron expressions** — standard 5-field cron syntax with full validation
 - **One-time tasks** — schedule a task to run once at a specific time
+
+**Execution**
 - **Worktree isolation** — run tasks in isolated git worktrees to avoid interfering with your working copy
+- **Shared executor** — single Node.js executor for all tasks, reading config at runtime (no per-task wrapper scripts)
+- **Run-to-run memory** — optional context injection from previous output so recurring tasks focus on new/changed items
+
+**Operations**
 - **Execution history** — JSONL-based history with filtering by status, task, and project
 - **Log management** — stdout/stderr capture with rotation and cleanup
-- **Run-to-run memory** — optional context injection from previous output so recurring tasks focus on new/changed items
-- **Shared executor** — single Node.js executor for all tasks, reading config at runtime (no per-task wrapper scripts)
 - **Security built-in** — env blocklist, sensitive file detection, shell escaping, trust boundary enforcement
 
 ## Requirements
@@ -31,13 +33,17 @@
 - Claude Code CLI (`claude`)
 - macOS (launchd) or Linux (crontab)
 
-## Installation
-
-Install as a Claude Code plugin:
+## Quick Start
 
 ```bash
 claude plugin install @dortort/scheduler
 ```
+
+Then in any Claude Code session:
+
+> "Schedule a daily code review at 9am"
+
+The plugin handles cron setup, OS scheduler registration, and worktree isolation automatically.
 
 Or for local development:
 
@@ -60,11 +66,11 @@ claude --plugin-dir /path/to/claude-code-scheduler
 | `/scheduler:logs` | View stdout/stderr logs for a task |
 | `/scheduler:history` | View execution history with filters |
 
-## Skill
-
-Say "schedule a daily code review at 9am" and the plugin will guide you through setup using the `/scheduler:add` command.
+---
 
 ## Architecture
+
+The plugin is organized as a set of focused modules:
 
 ```
 src/
@@ -103,6 +109,8 @@ Tasks are stored in JSON config files:
 - **Project**: `<project>/.claude/schedules.json` — shared team tasks
 
 Global config takes precedence on ID collision. Project configs cannot set `skipPermissions`.
+
+---
 
 ## Development
 
@@ -155,7 +163,12 @@ Enable branch protection on `main` requiring these status checks to pass:
    ```
 5. Open a pull request against `main`
 
-For project context, see [PRD.md](PRD.md) (product requirements) and [TDD.md](TDD.md) (test strategy).
+## See Also
+
+- [PRD.md](PRD.md) — product requirements
+- [TDD.md](TDD.md) — test strategy
+
+---
 
 ## License
 
