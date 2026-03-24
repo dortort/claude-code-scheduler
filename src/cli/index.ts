@@ -14,7 +14,7 @@ async function main() {
 
   if (!subcommand) {
     console.error('Usage: claude-scheduler <subcommand> [options]');
-    console.error('Subcommands: init, sync, add, remove, update, migrate');
+    console.error('Subcommands: init, sync, add, remove, update, migrate, validate-schedule, humanize');
     process.exit(1);
   }
 
@@ -130,6 +130,44 @@ async function main() {
         const result = await migrate();
         console.log(JSON.stringify(result));
         process.exitCode = result.success ? 0 : 1;
+        break;
+      }
+
+      case 'validate-schedule': {
+        const { validateSchedule } = await import('./commands/validate-schedule.js');
+        const { values } = parseArgs({
+          args: args.slice(1),
+          options: {
+            input: { type: 'string' },
+          },
+          strict: false,
+        });
+        if (!values.input) {
+          console.error(JSON.stringify({ error: 'Missing --input flag' }));
+          process.exit(1);
+        }
+        const result = validateSchedule(values.input as string);
+        console.log(JSON.stringify(result));
+        process.exitCode = 'error' in result ? 1 : 0;
+        break;
+      }
+
+      case 'humanize': {
+        const { humanize } = await import('./commands/humanize.js');
+        const { values } = parseArgs({
+          args: args.slice(1),
+          options: {
+            tasks: { type: 'string' },
+          },
+          strict: false,
+        });
+        if (!values.tasks) {
+          console.error(JSON.stringify({ error: 'Missing --tasks flag' }));
+          process.exit(1);
+        }
+        const tasks = JSON.parse(values.tasks as string);
+        const result = humanize(tasks);
+        console.log(JSON.stringify(result));
         break;
       }
 
