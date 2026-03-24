@@ -91,7 +91,7 @@ Report any issues found:
 
 - **Not registered**: task in config but no plist/crontab entry → suggest re-running `/scheduler:add`
 - **Orphaned**: plist/crontab entry with no matching config task → suggest manual removal or `/scheduler:remove`
-- **Executor missing**: shared executor at `~/.claude/bin/claude-scheduler-run` does not exist → suggest running `node ./dist/cli/index.js init`
+- **Executor missing**: shared executor at `~/.claude/bin/claude-scheduler-run` does not exist → suggest running `/scheduler:add` to reinstall
 - **Recent failures**: last execution status is `failure` or `timeout` → show taskId and suggest `/scheduler:logs <id>`
 - **Out-of-sync**: enabled flag differs between config and OS registration → suggest `/scheduler:add` to re-sync
 

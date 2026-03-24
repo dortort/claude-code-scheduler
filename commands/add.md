@@ -1,8 +1,7 @@
 ---
 allowed-tools:
   - Read
-  - Bash(node -e *)
-  - Bash(node ./dist/cli/index.js *)
+  - Bash(~/.claude/bin/claude-scheduler-cli *)
   - Bash(echo $PATH)
   - Bash(launchctl list *)
   - Bash(crontab -l *)
@@ -30,20 +29,7 @@ From the user's input, determine:
 Run a single `node -e` call to validate and humanize the schedule:
 
 ```bash
-SCHEDULE_INPUT='<user schedule text or cron>' node -e "
-const { naturalLanguageToCron, validateCron, getNextRuns, CRON_PRESETS } = require('./dist/cron/parser.js');
-const { cronToHuman } = require('./dist/cron/humanizer.js');
-const input = process.env.SCHEDULE_INPUT.trim();
-let cron = input;
-const nlResult = naturalLanguageToCron(input);
-if (nlResult) { cron = nlResult; }
-if (CRON_PRESETS[input.toLowerCase()]) { cron = CRON_PRESETS[input.toLowerCase()]; }
-const v = validateCron(cron);
-if (!v.valid) { console.log(JSON.stringify({ error: v.error })); process.exit(1); }
-const human = cronToHuman(cron);
-const nextRuns = getNextRuns(cron, 3).map(d => d.toISOString());
-console.log(JSON.stringify({ cron, human, nextRuns }));
-"
+~/.claude/bin/claude-scheduler-cli validate-schedule --input '<user schedule text or cron>'
 ```
 
 If validation fails, show the error and ask the user to correct the schedule.
@@ -76,7 +62,7 @@ Next 3 runs:
 Run a single CLI call that handles config, OS registration, and executor installation atomically:
 
 ```bash
-node ./dist/cli/index.js add \
+~/.claude/bin/claude-scheduler-cli add \
   --name '<task-name>' \
   --cron '<cron expression>' \
   --command '<prompt text>' \

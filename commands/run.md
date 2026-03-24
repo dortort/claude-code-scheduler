@@ -31,7 +31,7 @@ Match input against task `id` (exact) or `name` (case-insensitive).
 If not found: `Task "<input>" not found. Run /scheduler:list to see available tasks.`
 
 If shared executor `~/.claude/bin/claude-scheduler-run` does not exist:
-`Executor not installed. Run /scheduler:add to install it, or run: node ./dist/cli/index.js init`
+`Executor not installed. Run /scheduler:add to install it.`
 
 ### Step 2 — Confirm
 

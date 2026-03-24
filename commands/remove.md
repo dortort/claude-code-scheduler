@@ -1,7 +1,7 @@
 ---
 allowed-tools:
   - Read
-  - Bash(node ./dist/cli/index.js *)
+  - Bash(~/.claude/bin/claude-scheduler-cli *)
   - Bash(launchctl list *)
   - Bash(crontab -l *)
 ---
@@ -28,7 +28,7 @@ Show the task name, ID, schedule cron, and working directory. Ask for confirmati
 Run a single CLI call that handles config removal and OS deregistration atomically:
 
 ```bash
-node ./dist/cli/index.js remove --id '<taskId>'
+~/.claude/bin/claude-scheduler-cli remove --id '<taskId>'
 ```
 
 The CLI returns JSON: `{ "success": true, "taskId": "...", "taskName": "...", "configSaved": true, "osUnregistered": true }`

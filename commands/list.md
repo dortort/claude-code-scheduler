@@ -2,7 +2,7 @@
 allowed-tools:
   - Read
   - Glob
-  - Bash(node -e *)
+  - Bash(~/.claude/bin/claude-scheduler-cli *)
 ---
 
 # /list
@@ -55,17 +55,7 @@ Then stop.
 Use a single `node -e` call with the compiled modules (never `src/`):
 
 ```bash
-TASKS_JSON='[{"id":"...","cron":"..."}]' node -e "
-const { cronToHuman } = require('./dist/cron/humanizer.js');
-const { getNextRuns } = require('./dist/cron/parser.js');
-const tasks = JSON.parse(process.env.TASKS_JSON);
-const result = tasks.map(({ id, cron }) => ({
-  id,
-  human: cronToHuman(cron),
-  next: getNextRuns(cron, 1)[0]?.toISOString() ?? null,
-}));
-console.log(JSON.stringify(result));
-"
+~/.claude/bin/claude-scheduler-cli humanize --tasks '[{"id":"...","cron":"..."}]'
 ```
 
 ### Step 5 — Output table

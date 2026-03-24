@@ -1,7 +1,7 @@
 ---
 allowed-tools:
   - Read
-  - Bash(node ./dist/cli/index.js *)
+  - Bash(~/.claude/bin/claude-scheduler-cli *)
 ---
 
 # /disable
@@ -21,7 +21,7 @@ If already disabled: `Task "<name>" is already disabled.`
 ### Step 2 — Disable
 
 ```bash
-node ./dist/cli/index.js update --id '<taskId>' --enabled false
+~/.claude/bin/claude-scheduler-cli update --id '<taskId>' --enabled false
 ```
 
 ### Step 3 — Report

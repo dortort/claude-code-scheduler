@@ -1,8 +1,7 @@
 ---
 allowed-tools:
   - Read
-  - Bash(node -e *)
-  - Bash(node ./dist/cli/index.js *)
+  - Bash(~/.claude/bin/claude-scheduler-cli *)
 ---
 
 # /edit
@@ -31,18 +30,7 @@ From the user's input, determine which fields to update:
 If a new schedule is provided, validate it:
 
 ```bash
-SCHEDULE_INPUT='<new schedule>' node -e "
-const { naturalLanguageToCron, validateCron, CRON_PRESETS } = require('./dist/cron/parser.js');
-const { cronToHuman } = require('./dist/cron/humanizer.js');
-const input = process.env.SCHEDULE_INPUT.trim();
-let cron = input;
-const nlResult = naturalLanguageToCron(input);
-if (nlResult) { cron = nlResult; }
-if (CRON_PRESETS[input.toLowerCase()]) { cron = CRON_PRESETS[input.toLowerCase()]; }
-const v = validateCron(cron);
-if (!v.valid) { console.log(JSON.stringify({ error: v.error })); process.exit(1); }
-console.log(JSON.stringify({ cron, human: cronToHuman(cron) }));
-"
+~/.claude/bin/claude-scheduler-cli validate-schedule --input '<new schedule>'
 ```
 
 ### Step 3 — Confirm changes
@@ -52,7 +40,7 @@ Show the current and new values for each changed field. Ask for confirmation.
 ### Step 4 — Apply changes
 
 ```bash
-node ./dist/cli/index.js update \
+~/.claude/bin/claude-scheduler-cli update \
   --id '<taskId>' \
   [--cron '<new cron>'] \
   [--command '<new command>'] \
