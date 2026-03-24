@@ -1,8 +1,14 @@
 /**
- * Init command: writes the executor shim to ~/.claude/bin/claude-scheduler-run.
- * The shim embeds absolute paths to node and the executor, so it works
- * under launchd's minimal PATH. Re-running init is always safe and
- * updates the shim to match the current plugin cache and node location.
+ * Init command: writes shims to ~/.claude/bin/ for the scheduler.
+ *
+ * Two shims are installed:
+ * - claude-scheduler-run: executes scheduled tasks (used by launchd/cron)
+ * - claude-scheduler-cli: exposes CLI subcommands (used by skill commands)
+ *
+ * Both embed absolute paths to node and the dist directory, so they work
+ * regardless of the caller's working directory or PATH. Re-running init
+ * is always safe and updates both shims to match the current plugin cache
+ * and node location.
  */
 
 import fs from 'node:fs/promises';
@@ -13,6 +19,7 @@ export interface InitResult {
   success: boolean;
   executorPath: string;
   shimPath: string;
+  cliShimPath: string;
   error?: string;
 }
 
@@ -26,6 +33,10 @@ export function getExecutorPath(): string {
 
 export function getShimPath(): string {
   return path.join(getBinDir(), 'claude-scheduler-run');
+}
+
+export function getCliShimPath(): string {
+  return path.join(getBinDir(), 'claude-scheduler-cli');
 }
 
 const SHIM_TEMPLATE = `#!/bin/bash
@@ -44,6 +55,28 @@ fi
 exec {{NODE_PATH}} "$EXECUTOR" "$@"
 `;
 
+const CLI_SHIM_TEMPLATE = `#!/bin/bash
+# Claude Code Scheduler - CLI Shim
+# Installed by: claude-scheduler init
+set -euo pipefail
+
+CLI_ENTRY="{{CLI_ENTRY_PATH}}"
+if [ ! -f "$CLI_ENTRY" ]; then
+  echo "CLI entry not found at $CLI_ENTRY. Run /scheduler:add to reinstall." >&2
+  exit 1
+fi
+exec {{NODE_PATH}} "$CLI_ENTRY" "$@"
+`;
+
+/**
+ * Resolve the CLI entry point (dist/cli/index.js) from this module's location.
+ */
+function resolveCliEntryInPlace(): string {
+  // This file is at dist/cli/commands/init.js
+  // The CLI entry is at dist/cli/index.js (parent directory)
+  return path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', 'index.js');
+}
+
 /**
  * Find the executor source in the plugin cache or local dist.
  * Returns the absolute path to executor.js that has valid relative imports.
@@ -58,9 +91,11 @@ function resolveExecutorInPlace(): string {
 export async function init(): Promise<InitResult> {
   const binDir = getBinDir();
   const shimDest = getShimPath();
+  const cliShimDest = getCliShimPath();
 
-  // Resolve executor in place (keeps relative imports intact)
+  // Resolve paths in place (keeps relative imports intact)
   const executorPath = resolveExecutorInPlace();
+  const cliEntryPath = resolveCliEntryInPlace();
 
   try {
     await fs.mkdir(binDir, { recursive: true });
@@ -68,7 +103,7 @@ export async function init(): Promise<InitResult> {
     // Resolve absolute path to node (eliminates PATH dependency for shim startup)
     const nodePath = process.execPath;
 
-    // Write bash shim with absolute node path and user's PATH embedded
+    // Write executor shim with absolute node path and user's PATH embedded
     const userPath = process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin';
     const shimContent = SHIM_TEMPLATE
       .replace('{{EXECUTOR_PATH}}', executorPath)
@@ -76,12 +111,19 @@ export async function init(): Promise<InitResult> {
       .replace('{{USER_PATH}}', userPath);
     await fs.writeFile(shimDest, shimContent, { mode: 0o755 });
 
-    return { success: true, executorPath, shimPath: shimDest };
+    // Write CLI shim (no PATH restore needed — runs interactively)
+    const cliShimContent = CLI_SHIM_TEMPLATE
+      .replace('{{CLI_ENTRY_PATH}}', cliEntryPath)
+      .replace('{{NODE_PATH}}', nodePath);
+    await fs.writeFile(cliShimDest, cliShimContent, { mode: 0o755 });
+
+    return { success: true, executorPath, shimPath: shimDest, cliShimPath: cliShimDest };
   } catch (err) {
     return {
       success: false,
       executorPath,
       shimPath: shimDest,
+      cliShimPath: cliShimDest,
       error: (err as Error).message,
     };
   }
