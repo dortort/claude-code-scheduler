@@ -3,6 +3,7 @@
  * Uses dependency injection for exec to enable testing without real git.
  */
 
+import path from 'node:path';
 import { exec as defaultExec, type ExecResult } from '../utils/exec.js';
 
 export type ExecFn = (command: string, args: string[], options?: { cwd?: string }) => Promise<ExecResult>;
@@ -47,21 +48,28 @@ export async function isGitRepo(dirPath: string, exec: ExecFn = defaultExec): Pr
   }
 }
 
-export interface CreateWorktreeOptions {
-  repoPath: string;
-  worktreePath: string;
-  branchName: string;
-  exec?: ExecFn;
+/**
+ * Resolve the path where Claude CLI creates a worktree for the given name.
+ */
+export function getWorktreePath(repoRoot: string, name: string): string {
+  return path.join(repoRoot, '.claude', 'worktrees', name);
 }
 
 /**
- * Create a git worktree with a new branch.
+ * Generate a short worktree name for the `--worktree` CLI flag.
  */
-export async function createWorktree(options: CreateWorktreeOptions): Promise<void> {
-  const exec = options.exec ?? defaultExec;
-  await exec('git', ['worktree', 'add', options.worktreePath, '-b', options.branchName], {
-    cwd: options.repoPath,
-  });
+export function generateWorktreeName(taskId: string): string {
+  const shortId = taskId.slice(0, 8);
+  const timestamp = Math.floor(Date.now() / 1000);
+  return `task-${shortId}-${timestamp}`;
+}
+
+/**
+ * Derive the actual git branch name that Claude CLI creates for a worktree.
+ * Claude CLI names branches as `{repoBasename}-{worktreeName}`.
+ */
+export function deriveWorktreeBranchName(repoRoot: string, worktreeName: string): string {
+  return `${path.basename(repoRoot)}-${worktreeName}`;
 }
 
 export interface CommitAndPushOptions {
@@ -132,26 +140,22 @@ export async function commitAndPush(options: CommitAndPushOptions): Promise<Comm
  * Remove a git worktree. Retries once after 500ms on failure (handles file lock races).
  * Does not throw on final failure.
  */
-export async function removeWorktree(worktreePath: string, exec: ExecFn = defaultExec): Promise<void> {
+export async function removeWorktree(
+  worktreePath: string,
+  options?: { cwd?: string; exec?: ExecFn },
+): Promise<void> {
+  const exec = options?.exec ?? defaultExec;
+  const cwdOpt = options?.cwd ? { cwd: options.cwd } : undefined;
   try {
-    await exec('git', ['worktree', 'remove', worktreePath, '--force']);
+    await exec('git', ['worktree', 'remove', worktreePath, '--force'], cwdOpt);
   } catch {
     // Retry once after a short delay
     await new Promise(resolve => setTimeout(resolve, 500));
     try {
-      await exec('git', ['worktree', 'remove', worktreePath, '--force']);
+      await exec('git', ['worktree', 'remove', worktreePath, '--force'], cwdOpt);
     } catch {
       // Final failure - log but don't throw
       console.warn(`[claude-scheduler] Failed to remove worktree: ${worktreePath}`);
     }
   }
-}
-
-/**
- * Generate a branch name for a worktree execution.
- */
-export function generateBranchName(prefix: string, taskId: string): string {
-  const shortId = taskId.slice(0, 8);
-  const timestamp = Math.floor(Date.now() / 1000);
-  return `${prefix}task-${shortId}-${timestamp}`;
 }

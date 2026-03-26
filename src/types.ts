@@ -57,7 +57,7 @@ export type Trigger = z.infer<typeof TriggerSchema>;
 const WorktreeConfigSchema = z.object({
   enabled: z.boolean().default(false),
   basePath: z.string().optional(),
-  branchPrefix: z.string().default('claude-task/'),
+  branchPrefix: z.string().optional(), // Deprecated: branch naming controlled by Claude CLI --worktree
   remoteName: z.string().regex(/^[a-zA-Z0-9_.-]+$/, 'Remote name must be alphanumeric with dots, hyphens, underscores').default('origin'),
 });
 
@@ -196,7 +196,7 @@ export function createTask(input: CreateTaskInput): ScheduledTask {
       worktree: input.execution.worktree ? {
         enabled: input.execution.worktree.enabled,
         basePath: input.execution.worktree.basePath,
-        branchPrefix: input.execution.worktree.branchPrefix ?? 'claude-task/',
+        branchPrefix: input.execution.worktree.branchPrefix,
         remoteName: input.execution.worktree.remoteName ?? 'origin',
       } : undefined,
       memory: input.execution.memory ? {

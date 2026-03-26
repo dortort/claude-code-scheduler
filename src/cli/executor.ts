@@ -20,10 +20,11 @@ import { loadConfig, findTask, getLogsDir, getHistoryPath } from '../config.js';
 import { recordExecution } from '../history/index.js';
 import { ensureLogsDir, getLogPaths, readLog } from '../logs/index.js';
 import {
-  createWorktree,
   commitAndPush,
   removeWorktree,
-  generateBranchName,
+  getWorktreePath,
+  generateWorktreeName,
+  deriveWorktreeBranchName,
 } from '../vcs/index.js';
 import type { ScheduledTask } from '../types.js';
 
@@ -107,6 +108,7 @@ function spawnClaude(
     stderrPath: string;
     timeout: number;
     appendSystemPrompt?: string;
+    worktreeName?: string;
   },
 ): Promise<SpawnResult> {
   return new Promise((resolve) => {
@@ -114,6 +116,9 @@ function spawnClaude(
     const stderrFd = openSync(options.stderrPath, 'w');
 
     const args = ['-p'];
+    if (options.worktreeName) {
+      args.push('--worktree', options.worktreeName);
+    }
     if (options.appendSystemPrompt) {
       args.push('--append-system-prompt', options.appendSystemPrompt);
     }
@@ -221,14 +226,11 @@ async function runWorktree(
 ): Promise<SpawnResult & { worktreePath?: string; worktreeBranch?: string; pushed?: boolean }> {
   const wt = task.execution.worktree!;
   const repoPath = wt.basePath ?? task.execution.workingDirectory;
-  const branchName = generateBranchName(wt.branchPrefix, task.id);
-  const worktreePath = `/tmp/claude-worktree-${task.id}-${process.pid}`;
+  const worktreeName = generateWorktreeName(task.id);
+  const worktreePath = getWorktreePath(repoPath, worktreeName);
+  const branchName = deriveWorktreeBranchName(repoPath, worktreeName);
 
-  await createWorktree({
-    repoPath,
-    worktreePath,
-    branchName,
-  });
+  // Claude CLI creates the worktree via --worktree flag (no manual createWorktree needed)
 
   try {
     const logPaths = getLogPaths(logsDir, task.id, process.platform);
@@ -239,13 +241,14 @@ async function runWorktree(
     const appendSystemPrompt = await buildMemoryContext(task, stdoutPath);
 
     const result = await spawnClaude(task.execution.command, {
-      cwd: worktreePath,
+      cwd: repoPath,
       skipPermissions: task.execution.skipPermissions,
       env: task.execution.env,
       stdoutPath,
       stderrPath,
       timeout: task.execution.timeout,
       appendSystemPrompt,
+      worktreeName,
     });
 
     let pushed = false;
@@ -261,7 +264,7 @@ async function runWorktree(
 
     return { ...result, worktreePath, worktreeBranch: branchName, pushed };
   } finally {
-    await removeWorktree(worktreePath);
+    await removeWorktree(worktreePath, { cwd: repoPath });
   }
 }
 

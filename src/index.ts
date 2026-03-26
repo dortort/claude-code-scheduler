@@ -63,12 +63,13 @@ export {
 // VCS
 export {
   isGitRepo,
-  createWorktree,
   commitAndPush,
   removeWorktree,
   isSensitiveFile,
   SENSITIVE_FILE_PATTERNS,
-  generateBranchName,
+  getWorktreePath,
+  generateWorktreeName,
+  deriveWorktreeBranchName,
 } from './vcs/index.js';
 
 // Shared executor
