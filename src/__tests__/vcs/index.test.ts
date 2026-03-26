@@ -1,11 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
   isGitRepo,
-  createWorktree,
   commitAndPush,
   removeWorktree,
   isSensitiveFile,
   SENSITIVE_FILE_PATTERNS,
+  getWorktreePath,
+  generateWorktreeName,
+  deriveWorktreeBranchName,
   type ExecFn,
 } from '../../vcs/index.js';
 
@@ -44,26 +46,22 @@ describe('isGitRepo', () => {
   });
 });
 
-describe('createWorktree', () => {
-  it('creates worktree with correct branch name', async () => {
-    const calls: string[][] = [];
-    const exec: ExecFn = async (cmd, args) => {
-      calls.push([cmd, ...args]);
-      return { stdout: '', stderr: '', exitCode: 0 };
-    };
+describe('getWorktreePath', () => {
+  it('returns path inside .claude/worktrees', () => {
+    expect(getWorktreePath('/repo', 'task-abc-123')).toBe('/repo/.claude/worktrees/task-abc-123');
+  });
+});
 
-    await createWorktree({
-      repoPath: '/repo',
-      worktreePath: '/tmp/worktree',
-      branchName: 'claude-task/test-abc-123',
-      exec,
-    });
+describe('generateWorktreeName', () => {
+  it('returns task-{shortId}-{timestamp} format', () => {
+    const name = generateWorktreeName('abcdefgh-1234-5678-9012-ijklmnopqrst');
+    expect(name).toMatch(/^task-abcdefgh-\d+$/);
+  });
+});
 
-    // Should call git worktree add
-    const worktreeCall = calls.find(c => c.includes('worktree'));
-    expect(worktreeCall).toBeDefined();
-    expect(worktreeCall).toContain('add');
-    expect(worktreeCall).toContain('/tmp/worktree');
+describe('deriveWorktreeBranchName', () => {
+  it('returns {repoBasename}-{worktreeName}', () => {
+    expect(deriveWorktreeBranchName('/home/user/my-repo', 'task-abc-123')).toBe('my-repo-task-abc-123');
   });
 });
 
@@ -159,17 +157,31 @@ describe('commitAndPush', () => {
 
 describe('removeWorktree', () => {
   it('calls git worktree remove', async () => {
-    const calls: string[][] = [];
-    const exec: ExecFn = async (cmd, args) => {
-      calls.push([cmd, ...args]);
+    const calls: Array<{ args: string[]; opts?: { cwd?: string } }> = [];
+    const exec: ExecFn = async (cmd, args, opts) => {
+      calls.push({ args: [cmd, ...args], opts });
       return { stdout: '', stderr: '', exitCode: 0 };
     };
 
-    await removeWorktree('/tmp/worktree', exec);
+    await removeWorktree('/tmp/worktree', { exec });
 
-    const removeCall = calls.find(c => c.includes('remove'));
+    const removeCall = calls.find(c => c.args.includes('remove'));
     expect(removeCall).toBeDefined();
-    expect(removeCall).toContain('/tmp/worktree');
+    expect(removeCall!.args).toContain('/tmp/worktree');
+  });
+
+  it('passes cwd option to exec', async () => {
+    const calls: Array<{ args: string[]; opts?: { cwd?: string } }> = [];
+    const exec: ExecFn = async (cmd, args, opts) => {
+      calls.push({ args: [cmd, ...args], opts });
+      return { stdout: '', stderr: '', exitCode: 0 };
+    };
+
+    await removeWorktree('/repo/.claude/worktrees/task-abc', { cwd: '/repo', exec });
+
+    const removeCall = calls.find(c => c.args.includes('remove'));
+    expect(removeCall).toBeDefined();
+    expect(removeCall!.opts).toEqual({ cwd: '/repo' });
   });
 
   it('retries once on failure', async () => {
@@ -182,7 +194,7 @@ describe('removeWorktree', () => {
       return { stdout: '', stderr: '', exitCode: 0 };
     };
 
-    await removeWorktree('/tmp/worktree', exec);
+    await removeWorktree('/tmp/worktree', { exec });
     expect(callCount).toBe(2);
   });
 
@@ -192,7 +204,7 @@ describe('removeWorktree', () => {
     };
 
     // Should not throw - just logs warning
-    await expect(removeWorktree('/tmp/worktree', exec)).resolves.not.toThrow();
+    await expect(removeWorktree('/tmp/worktree', { exec })).resolves.not.toThrow();
   });
 });
 
