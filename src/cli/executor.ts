@@ -110,12 +110,16 @@ function spawnClaude(
   },
 ): Promise<SpawnResult> {
   return new Promise((resolve) => {
-    // Use file descriptors directly instead of pipe — claude -p may not
-    // write to piped stdout but does write to real file descriptors.
-    const stdoutFd = openSync(options.stdoutPath, 'w');
     const stderrFd = openSync(options.stderrPath, 'w');
 
-    const args = ['-p'];
+    // Use --output-format json to reliably capture output.
+    // claude -p does not write text to stdout when spawned as a subprocess
+    // (see anthropics/claude-code#771). JSON format always writes to stdout.
+    // We capture the JSON envelope, then extract the result text.
+    const jsonOutputPath = options.stdoutPath + '.json';
+    const jsonFd = openSync(jsonOutputPath, 'w');
+
+    const args = ['-p', '--output-format', 'json'];
     if (options.appendSystemPrompt) {
       args.push('--append-system-prompt', options.appendSystemPrompt);
     }
@@ -128,7 +132,7 @@ function spawnClaude(
     const child = spawn('claude', args, {
       cwd: options.cwd,
       env: childEnv,
-      stdio: ['ignore', stdoutFd, stderrFd],
+      stdio: ['ignore', jsonFd, stderrFd],
     });
 
     let timedOut = false;
@@ -140,16 +144,29 @@ function spawnClaude(
       }, 5000);
     }, options.timeout * 1000);
 
-    child.on('close', (code) => {
+    child.on('close', async (code) => {
       clearTimeout(timer);
-      closeSync(stdoutFd);
+      closeSync(jsonFd);
       closeSync(stderrFd);
+
+      // Extract result text from JSON envelope and write to stdout log
+      try {
+        const jsonContent = await readFile(jsonOutputPath, 'utf-8');
+        if (jsonContent.trim()) {
+          const envelope = JSON.parse(jsonContent);
+          const resultText = envelope.result ?? '';
+          await writeFile(options.stdoutPath, resultText, 'utf-8');
+        }
+      } catch {
+        // JSON parse failed — leave stdout log empty
+      }
+
       resolve({ exitCode: code ?? 1, timedOut });
     });
 
     child.on('error', () => {
       clearTimeout(timer);
-      closeSync(stdoutFd);
+      closeSync(jsonFd);
       closeSync(stderrFd);
       resolve({ exitCode: 1, timedOut: false });
     });
