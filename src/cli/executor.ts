@@ -10,7 +10,7 @@
  */
 
 import { spawn } from 'node:child_process';
-import { createWriteStream } from 'node:fs';
+import { openSync, closeSync } from 'node:fs';
 import { mkdir, rm, readFile, writeFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -110,8 +110,10 @@ function spawnClaude(
   },
 ): Promise<SpawnResult> {
   return new Promise((resolve) => {
-    const stdoutStream = createWriteStream(options.stdoutPath);
-    const stderrStream = createWriteStream(options.stderrPath);
+    // Use file descriptors directly instead of pipe — claude -p may not
+    // write to piped stdout but does write to real file descriptors.
+    const stdoutFd = openSync(options.stdoutPath, 'w');
+    const stderrFd = openSync(options.stderrPath, 'w');
 
     const args = ['-p'];
     if (options.appendSystemPrompt) {
@@ -126,11 +128,8 @@ function spawnClaude(
     const child = spawn('claude', args, {
       cwd: options.cwd,
       env: childEnv,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['ignore', stdoutFd, stderrFd],
     });
-
-    child.stdout?.pipe(stdoutStream);
-    child.stderr?.pipe(stderrStream);
 
     let timedOut = false;
     const timer = setTimeout(() => {
@@ -143,15 +142,15 @@ function spawnClaude(
 
     child.on('close', (code) => {
       clearTimeout(timer);
-      stdoutStream.end();
-      stderrStream.end();
+      closeSync(stdoutFd);
+      closeSync(stderrFd);
       resolve({ exitCode: code ?? 1, timedOut });
     });
 
     child.on('error', () => {
       clearTimeout(timer);
-      stdoutStream.end();
-      stderrStream.end();
+      closeSync(stdoutFd);
+      closeSync(stderrFd);
       resolve({ exitCode: 1, timedOut: false });
     });
   });
