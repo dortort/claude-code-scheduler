@@ -34,6 +34,10 @@
     "automation",
     "plugin"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dortort/claude-code-scheduler"
+  },
   "license": "MIT",
   "dependencies": {
     "croner": "^8.1.2",
