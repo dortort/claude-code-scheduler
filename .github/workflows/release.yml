@@ -19,8 +19,14 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          registry-url: https://registry.npmjs.org
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
-      - run: npm publish --provenance --access public
+      - name: Publish with OIDC provenance
+        run: |
+          # Strip the _authToken line so npm uses OIDC trusted publishing
+          # instead of the (potentially invalid) NODE_AUTH_TOKEN secret
+          sed -i '/_authToken/d' "$NPM_CONFIG_USERCONFIG"
+          npm publish --provenance --access public
