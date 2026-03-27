@@ -56,7 +56,7 @@ export function getWorktreePath(repoRoot: string, name: string): string {
 }
 
 /**
- * Generate a short worktree name for the `--worktree` CLI flag.
+ * Generate a short worktree name for the --worktree CLI flag.
  */
 export function generateWorktreeName(taskId: string): string {
   const shortId = taskId.slice(0, 8);
@@ -66,7 +66,7 @@ export function generateWorktreeName(taskId: string): string {
 
 /**
  * Derive the actual git branch name that Claude CLI creates for a worktree.
- * Claude CLI names branches as `{repoBasename}-{worktreeName}`.
+ * Claude CLI names branches as {repoBasename}-{worktreeName}.
  */
 export function deriveWorktreeBranchName(repoRoot: string, worktreeName: string): string {
   return `${path.basename(repoRoot)}-${worktreeName}`;
@@ -77,6 +77,7 @@ export interface CommitAndPushOptions {
   message: string;
   remoteName: string;
   branchName: string;
+  sensitiveFilePolicy?: 'block' | 'warn' | 'allow';
   exec?: ExecFn;
 }
 
@@ -86,19 +87,41 @@ export interface CommitAndPushResult {
   commitSha?: string;
   pushed: boolean;
   error?: string;
+  sensitiveFilesDetected?: string[];
 }
 
 /**
- * Stage tracked changes, commit, and push. Uses `git add -u` (not `-A`) by default.
+ * Stage tracked changes, commit, and push. Uses git add -u (not -A) by default.
+ * Enforces sensitiveFilePolicy before committing.
  * Returns a result object instead of throwing on failure.
  */
 export async function commitAndPush(options: CommitAndPushOptions): Promise<CommitAndPushResult> {
   const exec = options.exec ?? defaultExec;
   const cwd = { cwd: options.worktreePath };
+  const policy = options.sensitiveFilePolicy ?? 'block';
 
   try {
     // Stage tracked files only (not untracked - safer default)
     await exec('git', ['add', '-u'], cwd);
+
+    // Detect sensitive files in the index
+    const diffResult = await exec('git', ['diff', '--cached', '--name-only'], cwd);
+    const stagedFiles = diffResult.stdout.split('\n').map(f => f.trim()).filter(Boolean);
+    const sensitiveFiles = stagedFiles.filter(f => isSensitiveFile(f));
+
+    if (sensitiveFiles.length > 0) {
+      if (policy === 'block') {
+        for (const file of sensitiveFiles) {
+          console.warn(`[claude-scheduler] Blocking sensitive file from commit: ${file}`);
+          await exec('git', ['reset', 'HEAD', file], cwd);
+        }
+      } else if (policy === 'warn') {
+        for (const file of sensitiveFiles) {
+          console.warn(`[claude-scheduler] Warning: sensitive file staged for commit: ${file}`);
+        }
+      }
+      // 'allow' -- proceed silently
+    }
 
     // Check if there are staged changes
     const status = await exec('git', ['status', '--porcelain'], cwd);
@@ -113,10 +136,15 @@ export async function commitAndPush(options: CommitAndPushOptions): Promise<Comm
     const shaResult = await exec('git', ['rev-parse', 'HEAD'], cwd);
     const commitSha = shaResult.stdout.trim();
 
+    // Build sensitiveFilesDetected for result (block and warn only)
+    const detectedField = (policy !== 'allow' && sensitiveFiles.length > 0)
+      ? { sensitiveFilesDetected: sensitiveFiles }
+      : {};
+
     // Push
     try {
       await exec('git', ['push', '-u', options.remoteName, options.branchName], cwd);
-      return { success: true, hadChanges: true, commitSha, pushed: true };
+      return { success: true, hadChanges: true, commitSha, pushed: true, ...detectedField };
     } catch (pushErr) {
       return {
         success: false,
@@ -124,6 +152,7 @@ export async function commitAndPush(options: CommitAndPushOptions): Promise<Comm
         commitSha,
         pushed: false,
         error: pushErr instanceof Error ? pushErr.message : 'Push failed',
+        ...detectedField,
       };
     }
   } catch (err) {

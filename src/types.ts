@@ -61,6 +61,7 @@ const WorktreeConfigSchema = z.object({
   basePath: z.string().optional(),
   branchPrefix: z.string().optional(), // Deprecated: branch naming controlled by Claude CLI --worktree
   remoteName: z.string().regex(/^[a-zA-Z0-9_.-]+$/, 'Remote name must be alphanumeric with dots, hyphens, underscores').default('origin'),
+  sensitiveFilePolicy: z.enum(['block', 'warn', 'allow']).default('block'),
 });
 
 // --- Execution Config ---

@@ -223,7 +223,7 @@ async function runDirect(
 async function runWorktree(
   task: ScheduledTask,
   logsDir: string,
-): Promise<SpawnResult & { worktreePath?: string; worktreeBranch?: string; pushed?: boolean }> {
+): Promise<SpawnResult & { worktreePath?: string; worktreeBranch?: string; pushed?: boolean; sensitiveFilesDetected?: string[] }> {
   const wt = task.execution.worktree!;
   const repoPath = wt.basePath ?? task.execution.workingDirectory;
   const worktreeName = generateWorktreeName(task.id);
@@ -252,17 +252,20 @@ async function runWorktree(
     });
 
     let pushed = false;
+    let sensitiveFilesDetected: string[] | undefined;
     if (result.exitCode === 0) {
       const pushResult = await commitAndPush({
         worktreePath,
         message: `Claude scheduled task: ${task.name}`,
         remoteName: wt.remoteName,
         branchName,
+        sensitiveFilePolicy: wt.sensitiveFilePolicy ?? 'block',
       });
       pushed = pushResult.pushed;
+      sensitiveFilesDetected = pushResult.sensitiveFilesDetected;
     }
 
-    return { ...result, worktreePath, worktreeBranch: branchName, pushed };
+    return { ...result, worktreePath, worktreeBranch: branchName, pushed, sensitiveFilesDetected };
   } finally {
     await removeWorktree(worktreePath, { cwd: repoPath });
   }
