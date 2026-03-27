@@ -21,6 +21,7 @@ export interface AddArgs {
   skipPermissions?: boolean;
   description?: string;
   memory?: boolean;
+  projectPath?: string;
 }
 
 export interface AddResult {
@@ -62,6 +63,7 @@ export async function add(args: AddArgs): Promise<AddResult> {
       timeout: args.timeout ?? 300,
       skipPermissions: args.skipPermissions ?? false,
       memory: args.memory ? { enabled: true } : undefined,
+      projectPath: args.projectPath,
     },
   });
 

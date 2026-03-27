@@ -83,6 +83,7 @@ export const ExecutionConfigSchema = z.object({
   skipPermissions: z.boolean().default(false),
   worktree: WorktreeConfigSchema.optional(),
   memory: MemoryConfigSchema.optional(),
+  projectPath: z.string().optional(),
 });
 
 export type ExecutionConfig = z.infer<typeof ExecutionConfigSchema>;
@@ -213,6 +214,7 @@ export interface CreateTaskInput {
       maxLines?: number;
       maxChars?: number;
     };
+    projectPath?: string;
   };
   tags?: string[];
 }
@@ -245,6 +247,7 @@ export function createTask(input: CreateTaskInput): ScheduledTask {
         maxLines: input.execution.memory.maxLines ?? 200,
         maxChars: input.execution.memory.maxChars ?? 4000,
       } : undefined,
+      projectPath: input.execution.projectPath,
     },
     tags: input.tags ?? [],
     createdAt: now,

@@ -16,7 +16,7 @@ import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
 
-import { loadConfig, findTask, getLogsDir, getHistoryPath } from '../config.js';
+import { loadConfig, loadMergedConfig, findTask, getLogsDir, getHistoryPath } from '../config.js';
 import { recordExecution } from '../history/index.js';
 import { ensureLogsDir, getLogPaths, readLog } from '../logs/index.js';
 import {
@@ -277,7 +277,16 @@ export async function run(taskId: string): Promise<void> {
   const configPath = process.env.CLAUDE_SCHEDULER_CONFIG
     ?? path.join(os.homedir(), '.claude', 'schedules.json');
 
-  const config = await loadConfig(configPath);
+  const initialConfig = await loadConfig(configPath);
+  const initialTask = findTask(initialConfig, taskId);
+
+  // If the task specifies a projectPath, reload using merged config so project tasks are included
+  let config = initialConfig;
+  if (initialTask?.execution.projectPath) {
+    const { merged } = await loadMergedConfig(initialTask.execution.projectPath, configPath);
+    config = merged;
+  }
+
   const task = findTask(config, taskId);
 
   if (!task) {
