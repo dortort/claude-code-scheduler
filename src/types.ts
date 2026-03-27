@@ -5,6 +5,8 @@
 
 import { z } from 'zod';
 import crypto from 'node:crypto';
+import path from 'node:path';
+import { Cron } from 'croner';
 
 // --- Environment Variable Security ---
 
@@ -149,6 +151,44 @@ export const SchedulesConfigSchema = z.object({
 
 export type SchedulesConfig = z.infer<typeof SchedulesConfigSchema>;
 
+// --- Strict Schemas (for createTask / saveConfig) ---
+
+const CronTriggerSchemaStrict = z.object({
+  type: z.literal('cron'),
+  expression: z.string().min(1).refine(
+    (expr) => { try { new Cron(expr); return true; } catch { return false; } },
+    { message: 'Invalid cron expression' },
+  ),
+  timezone: z.string().default('local'),
+});
+
+const OnceTriggerSchemaStrict = z.object({
+  type: z.literal('once'),
+  timestamp: z.string().datetime(),
+  timezone: z.string().default('local'),
+});
+
+const ExecutionConfigSchemaStrict = ExecutionConfigSchema.extend({
+  workingDirectory: z.string().min(1).refine(
+    (dir) => path.isAbsolute(dir),
+    { message: 'workingDirectory must be an absolute path' },
+  ),
+});
+
+export const ScheduledTaskSchemaStrict = ScheduledTaskSchema.extend({
+  trigger: z.discriminatedUnion('type', [
+    CronTriggerSchemaStrict,
+    OnceTriggerSchemaStrict,
+  ]),
+  execution: ExecutionConfigSchemaStrict,
+});
+
+export const SchedulesConfigSchemaStrict = z.object({
+  version: z.literal(1),
+  tasks: z.array(ScheduledTaskSchemaStrict),
+  settings: SettingsSchema.optional(),
+});
+
 // --- Factory Functions ---
 
 export interface CreateTaskInput {
@@ -209,8 +249,8 @@ export function createTask(input: CreateTaskInput): ScheduledTask {
     createdAt: now,
     updatedAt: now,
   };
-  // Validate the created task
-  return ScheduledTaskSchema.parse(task);
+  // Validate the created task with strict schema (cron + absolute path)
+  return ScheduledTaskSchemaStrict.parse(task);
 }
 
 /**

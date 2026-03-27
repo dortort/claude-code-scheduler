@@ -8,6 +8,7 @@ import path from 'node:path';
 import os from 'node:os';
 import {
   SchedulesConfigSchema,
+  SchedulesConfigSchemaStrict,
   createEmptyConfig,
   type SchedulesConfig,
   type ScheduledTask,
@@ -63,8 +64,8 @@ export async function loadConfig(filePath: string): Promise<SchedulesConfig> {
  * Uses temp-file-then-rename for atomic writes (no partial writes on crash).
  */
 export async function saveConfig(filePath: string, config: SchedulesConfig): Promise<void> {
-  // Validate before writing
-  SchedulesConfigSchema.parse(config);
+  // Validate before writing (strict: rejects invalid cron + relative paths)
+  SchedulesConfigSchemaStrict.parse(config);
   const dir = path.dirname(filePath);
   await fs.mkdir(dir, { recursive: true });
   const tmpPath = path.join(dir, `.schedules.${process.pid}.tmp`);
