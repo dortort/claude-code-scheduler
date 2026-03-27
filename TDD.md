@@ -26,10 +26,10 @@
 │  └────────────┘  └────────────────┘  └─────────────────────┘   │
 │                                                                  │
 │  ┌──────────────────┐  ┌──────────────────────────────────┐    │
-│  │ templates/        │  │ schedulers/                       │    │
-│  │ wrapper.ts        │  │ base.ts (shared utilities)        │    │
-│  │ generateDirect()  │  │ darwin.ts (plist, CalendarInterval)│    │
-│  │ generateWorktree()│  │ linux.ts (crontab, markers)       │    │
+│  │ cli/executor.ts  │  │ schedulers/                       │    │
+│  │ shared runtime   │  │ base.ts (shared utilities)        │    │
+│  │ lock/timeout/log │  │ darwin.ts (plist, CalendarInterval)│    │
+│  │ direct/worktree  │  │ linux.ts (crontab, markers)       │    │
 │  └──────────────────┘  │ index.ts (factory, detection)     │    │
 │                         └──────────────────────────────────┘    │
 │                                                                  │
@@ -52,8 +52,8 @@
 │                         triggers                                 │
 │                           │                                      │
 │                           ▼                                      │
-│              /bin/bash ~/.claude/logs/<id>.sh                    │
-│              (generated wrapper script with mkdir lock, timeout, etc.) │
+│              ~/.claude/bin/claude-scheduler-run <id>             │
+│              (shared executor shim + runtime)                    │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -66,8 +66,7 @@ index.ts (public API re-exports)
   │     └── types.ts
   ├── cron/parser.ts (croner validation, NL-to-cron, presets)
   ├── cron/humanizer.ts (cronstrue wrapper, date/duration formatting)
-  ├── templates/wrapper.ts (bash script generators)
-  │     └── utils/shell.ts
+  ├── cli/executor.ts (shared runtime, locks, timeout, logs, history)
   ├── schedulers/index.ts (platform detection, factory)
   ├── schedulers/base.ts (shared utilities)
   ├── schedulers/darwin.ts (plist generation, cronToCalendarInterval)
@@ -121,8 +120,13 @@ All types are defined in `src/types.ts` with Zod schemas for runtime validation.
     skipPermissions: boolean;    // Default false, stripped from project configs
     worktree?: {
       enabled: boolean;
-      branchPrefix: string;      // Default "claude-task/"
       remoteName: string;        // Default "origin"
+      basePath?: string;
+    };
+    memory?: {
+      enabled: boolean;
+      maxLines?: number;
+      maxChars?: number;
     };
   };
   tags: string[];                // Default []
@@ -137,24 +141,9 @@ All types are defined in `src/types.ts` with Zod schemas for runtime validation.
 
 #### ExecutionHistoryRecord
 
-```typescript
-{
-  taskId: string;
-  taskName: string;              // Denormalized for efficient querying
-  project: string;               // Working directory
-  startedAt: string;             // ISO-8601
-  finishedAt?: string;           // ISO-8601
-  durationMs?: number;
-  status: string;                // "success" | "failure" | "timeout" | "skipped"
-  exitCode?: number;
-  trigger: string;               // "scheduled" | "manual"
-  error?: string;
-  // v0.2.0 placeholders (optional, accepted but not populated):
-  sessionId?: string;
-  sessionExpiry?: string;
-  executedCommand?: string;
-}
-```
+Execution history records capture task identity, project, timing, status, exit metadata,
+and optional worktree/session metadata. The exact record shape is defined in `src/types.ts`
+and should be treated as the implementation source of truth.
 
 ### 2.2 Configuration Files
 
@@ -243,43 +232,27 @@ Thin wrapper over `child_process`:
 | `formatDuration(ms)` | Milliseconds to "1h 2m 3s" |
 | `formatRelativeTime(date)` | "5 minutes ago" / "in 2 hours" |
 
-### 3.5 Execution Wrapper Templates (`templates/wrapper.ts`)
+### 3.5 Shared Execution Runtime (`cli/executor.ts`)
 
-Two generators that produce self-contained bash scripts:
+Scheduled tasks are executed through a shared Node.js runtime installed under
+`~/.claude/bin/claude-scheduler-run`.
 
-#### `generateDirectWrapper(options: WrapperOptions)`
-
-Non-worktree execution. Script includes:
-1. `#!/bin/bash` + `set -euo pipefail`
-2. `export PATH="<captured-user-path>"`
-3. `mkdir -p <logsDir>`
-4. `cd <workingDirectory>` (shell-escaped)
-5. `mkdir` lock on `/tmp/claude-scheduler-<taskId>.lock`
-6. `claude -p <escaped-command> [--dangerously-skip-permissions]` as background process
-7. Timeout enforcement via polling loop + `kill -TERM` / `kill -KILL`
-8. stdout/stderr redirection to `.out.log` / `.err.log`
-9. Status marker file (success/failure/timeout)
-10. `trap cleanup EXIT INT TERM`
-
-#### `generateWorktreeWrapper(options: WorktreeWrapperOptions)`
-
-Adds git worktree lifecycle around the direct wrapper:
-1. All of the above, plus:
-2. `git worktree add <path> -b <branchPrefix><shortId>-<timestamp>`
-3. `cd <worktree>`
-4. Claude execution in worktree
-5. `git add -u` (tracked files only, NOT `-A`)
-6. `git commit -m "Claude scheduled task: <name>"`
-7. `git push -u <remote> <branch>`
-8. `git worktree remove <path> --force`
-9. Trap handler cleans up worktree on signal/error
+Responsibilities:
+1. Restore runtime environment and locate task config at execution time
+2. Acquire and release the per-task lock
+3. Enforce timeouts and collect exit status
+4. Invoke `claude -p` for direct execution
+5. Invoke `claude -p --worktree <name>` for worktree execution
+6. Delegate worktree creation and naming to Claude CLI
+7. Commit and push tracked changes after successful worktree runs
+8. Write logs, status markers, and execution history
 
 ### 3.6 Platform Schedulers (`schedulers/`)
 
 #### Base (`base.ts`)
 
 Shared utilities (not an abstract class):
-- `getExecutionCommand(task)` -- returns wrapper script path
+- `getExecutionCommand(task)` -- returns shared executor shim invocation
 - `getCronExpression(task)` -- returns cron expression or undefined
 - `SchedulerTask` interface
 
@@ -293,10 +266,9 @@ Shared utilities (not an abstract class):
   - Step values with <=24 expansions -> expanded CalendarInterval entries
   - Step values with >24 expansions -> returns `null` (StartInterval fallback)
 - `generatePlist(task)` -- full XML plist with:
-  - Label, ProgramArguments (`/bin/bash`, script path)
+  - Label, ProgramArguments for the shared executor shim + task ID
   - StandardOutPath, StandardErrorPath
   - StartCalendarInterval or StartInterval
-  - RunAtLoad for one-time tasks
   - XML escaping for all user values (`& < > " '`)
 
 #### Linux (`linux.ts`)
@@ -305,7 +277,7 @@ Shared utilities (not an abstract class):
   ```
   # claude-scheduler:<id>:begin
   PATH=<userPath>
-  [TZ=<timezone>] <cron> /bin/bash <wrapperScript>
+  [TZ=<timezone>] <cron> /bin/bash <sharedExecutorShim> <taskId>
   # claude-scheduler:<id>:end
   ```
 - `parseCrontabMarkers(crontab)` -- extracts task IDs from existing crontab
@@ -342,11 +314,12 @@ Corrupted lines are silently skipped in all read operations.
 | Function | Description |
 |----------|-------------|
 | `isGitRepo(dirPath, exec?)` | `git rev-parse --is-inside-work-tree` |
-| `createWorktree(options)` | `git worktree add <path> -b <branch>` |
 | `commitAndPush(options)` | `git add -u` -> status -> commit -> push; returns result object (never throws) |
 | `removeWorktree(path, exec?)` | `git worktree remove --force`; retries once after 500ms; never throws |
 | `isSensitiveFile(filename)` | Checks against `SENSITIVE_FILE_PATTERNS` |
-| `generateBranchName(prefix, taskId)` | `<prefix>task-<shortId>-<timestamp>` |
+| `getWorktreePath(repoRoot, name)` | Resolves the Claude-managed worktree path |
+| `generateWorktreeName(taskId)` | Generates a worktree name for Claude CLI |
+| `deriveWorktreeBranchName(repoRoot, worktreeName)` | Derives the Claude-managed branch name |
 
 Dependency injection: all git functions accept optional `exec` parameter for testing.
 
@@ -359,7 +332,7 @@ Dependency injection: all git functions accept optional `exec` parameter for tes
 ```
 TRUSTED (user-controlled):
 ├── ~/.claude/schedules.json (global config)
-├── ~/.claude/logs/* (logs and wrapper scripts)
+├── ~/.claude/logs/* (logs and status markers)
 └── User input via /scheduler:add
 
 UNTRUSTED (repo-controlled):
@@ -410,25 +383,18 @@ Layer 6: Claude Code Permission System
 - **Pattern:** `src/__tests__/**/*.test.ts`
 - **Run:** `npm test` (vitest run)
 
-### 5.2 Test Coverage (v0.1.0 -- 258 tests across 15 files)
+### 5.2 Test Coverage
 
-| Test File | Tests | Module |
-|-----------|-------|--------|
-| `utils/shell.test.ts` | 32 | Shell escaping, validation patterns |
-| `utils/exec.test.ts` | 6 | Exec wrapper, ExecError |
-| `types.test.ts` | 33 | Zod schemas, factory functions, security validations |
-| `config.test.ts` | 33 | Load/save/merge, trust boundary, CRUD |
-| `cron/parser.test.ts` | 27 | Cron validation, NL parsing, presets |
-| `cron/humanizer.test.ts` | 14 | Human-readable, formatting utilities |
-| `logs/index.test.ts` | 15 | Read, append, rotate, cleanup |
-| `history/index.test.ts` | 14 | Record, query, filter, cleanup, corrupted lines |
-| `vcs/index.test.ts` | 16 | Git operations with mock exec, sensitive files |
-| `templates/wrapper.test.ts` | 23 | Direct + worktree wrapper generation |
-| `schedulers/base.test.ts` | 4 | Shared utilities |
-| `schedulers/darwin.test.ts` | 18 | Plist, CalendarInterval, StartInterval fallback |
-| `schedulers/linux.test.ts` | 11 | Crontab line, markers, idempotent add/replace/remove |
-| `schedulers/index.test.ts` | 5 | Factory, PlatformNotSupportedError |
-| `integration/lifecycle.test.ts` | 7 | Full lifecycle, cross-module integration |
+The automated test suite covers:
+- Shell escaping and validation helpers
+- Process execution utilities
+- Zod schemas and config CRUD/merge logic
+- Cron parsing and humanization
+- Logs and execution history storage
+- VCS helpers and worktree cleanup
+- Shared executor behavior and output capture
+- Platform scheduler generation and registration helpers
+- Integration and Claude CLI E2E flows
 
 ### 5.3 TDD Discipline
 
@@ -455,7 +421,7 @@ All production code was developed test-first (Red-Green-Refactor):
 ```bash
 npm run build       # tsc -> dist/
 npm run typecheck   # tsc --noEmit
-npm test            # vitest run (258 tests)
+npm test            # vitest run
 ```
 
 ### 6.2 Package Distribution

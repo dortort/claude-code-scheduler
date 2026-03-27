@@ -64,7 +64,7 @@ User: "schedule a daily code review at 9am"
   -> Asks about autonomous execution (skipPermissions)
   -> Optionally asks about worktree isolation
   -> Shows confirmation with next 3 run times
-  -> Generates wrapper script
+  -> Ensures scheduler runtime is installed
   -> Registers with OS scheduler
   -> Returns task ID
 ```
@@ -93,20 +93,18 @@ User: "schedule a daily code review at 9am"
 | FR-2.3 | Auto-commit changes with descriptive message | P0 | Done |
 | FR-2.4 | Push to configurable remote (default: origin) | P0 | Done |
 | FR-2.5 | Clean up worktree after successful push | P1 | Done |
-| FR-2.6 | Configurable branch prefix (default: "claude-task/") | P2 | Done |
+| FR-2.6 | Worktree and branch naming are delegated to Claude CLI worktree support | P2 | Done |
 
 **Worktree Execution Flow:**
 ```
-OS scheduler triggers wrapper script
+OS scheduler triggers shared executor
   -> mkdir-based concurrency guard (skip if already running)
-  -> Create worktree: git worktree add <path> -b <branchPrefix><shortId>-<timestamp>
-  -> cd <worktree>
-  -> Execute: claude -p '<prompt>' [--dangerously-skip-permissions]
+  -> Invoke Claude in worktree mode
+  -> Claude CLI creates/manages the isolated worktree
   -> Stage tracked files only: git add -u (NOT git add -A)
   -> Commit: git commit -m "Claude scheduled task: <name>"
   -> Push: git push -u <remote> <branch>
-  -> Cleanup: git worktree remove <path> --force
-  -> trap handler cleans up on signal/error
+  -> Cleanup managed worktree
 ```
 
 **Key decision:** `git add -u` is used by default (not `-A`) to avoid staging untracked files that could contain secrets. Sensitive file patterns (.env, .pem, .key, credentials, etc.) are also detected.
@@ -127,7 +125,6 @@ OS scheduler triggers wrapper script
 - Plist label: `com.claude-scheduler.<taskId>`
 - Simple cron -> `StartCalendarInterval` (multiple dicts for multi-value fields)
 - Step values with >24 expansions -> `StartInterval` fallback (seconds)
-- One-time tasks use `RunAtLoad: true` without CalendarInterval
 - XML escaping for all user-provided values (`& < > " '`)
 
 **Linux details:**
@@ -185,7 +182,6 @@ OS scheduler triggers wrapper script
         "skipPermissions": false,
         "worktree": {
           "enabled": false,
-          "branchPrefix": "claude-task/",
           "remoteName": "origin"
         }
       },
@@ -213,7 +209,6 @@ OS scheduler triggers wrapper script
 | stderr | `~/.claude/logs/<id>.err.log` | Claude's error output (macOS) |
 | combined | `~/.claude/logs/<id>.log` | Combined output (Linux) |
 | status | `~/.claude/logs/<id>.status` | Execution result marker (success/failure) |
-| wrapper | `~/.claude/logs/<id>.sh` | Generated wrapper script |
 
 **Log rotation:** Files rotate at configurable threshold, renamed to `.1` (single rotated copy).
 
@@ -226,18 +221,18 @@ OS scheduler triggers wrapper script
 - Auto-cleanup keeps last N records
 - Corrupted lines skipped gracefully
 
-### 2.5 Execution Wrapper
+### 2.5 Execution Runtime
 
-Each task gets a generated bash wrapper script that handles:
+Scheduled tasks are executed through a shared runtime installed under `~/.claude/bin/`. The runtime is responsible for:
 
-1. **PATH restoration** - Embeds the user's PATH captured at registration time
-2. **Working directory** - `cd` to the absolute working directory
-3. **Concurrency guard** - `mkdir`-based locking prevents parallel execution of the same task
-4. **Timeout enforcement** - Background process with kill after timeout + grace period
-5. **Claude invocation** - `claude -p '<escaped-prompt>'` with optional `--dangerously-skip-permissions`
-6. **Log routing** - stdout and stderr to separate files
-7. **Status marker** - Writes success/failure to `.status` file
-8. **Signal handling** - `trap` cleans up on EXIT, INT, TERM
+1. **PATH restoration** - Preserves the user's shell PATH for unattended runs
+2. **Working directory** - Executes from the configured absolute working directory
+3. **Concurrency guard** - Prevents overlapping runs of the same task
+4. **Timeout enforcement** - Terminates tasks that exceed their configured timeout
+5. **Claude invocation** - Runs `claude -p` with optional autonomous execution flags
+6. **Worktree delegation** - Uses Claude CLI worktree support when worktree mode is enabled
+7. **Log routing** - Writes task output to per-task log files
+8. **Status/history recording** - Updates the status marker and execution history
 
 ---
 
@@ -327,8 +322,7 @@ SchedulesConfig (1) ──── has many ──── ScheduledTask (N)
     ├── <task-id>.out.log       # stdout (macOS)
     ├── <task-id>.err.log       # stderr (macOS)
     ├── <task-id>.log           # combined (Linux)
-    ├── <task-id>.status        # Execution result marker
-    └── <task-id>.sh            # Generated wrapper script
+    └── <task-id>.status        # Execution result marker
 
 <project>/.claude/
 └── schedules.json              # Project-level task definitions
@@ -345,11 +339,11 @@ SchedulesConfig (1) ──── has many ──── ScheduledTask (N)
 - Core scheduling (cron + natural language + one-time triggers)
 - macOS (launchd) and Linux (crontab) scheduler integration
 - Worktree isolation with `git add -u` and sensitive file detection
-- Execution wrapper with timeout, mkdir-based concurrency guard, logging
+- Shared execution runtime with timeout, concurrency guard, and logging
 - Configuration with trust boundary enforcement
 - Execution history (append-only JSONL)
-- 7 slash commands + 1 NL skill
-- 258 tests across 15 test files
+- Slash commands and NL-triggered scheduling flow
+- Automated test coverage across unit, integration, and E2E suites
 
 ### v0.2.0 (Next)
 - Windows support (schtasks)
@@ -408,12 +402,12 @@ SchedulesConfig (1) ──── has many ──── ScheduledTask (N)
 | D8 | Error handling | Plain Error + Zod | No custom error hierarchy |
 | D9 | Config merge | Global wins on ID collision | Project configs add-only |
 | D10 | Security | Built-in per phase | Not a separate hardening phase |
-| D11 | Concurrency | `mkdir`-based lock in wrapper script | Prevents parallel execution |
+| D11 | Concurrency | `mkdir`-based lock in shared runtime | Prevents parallel execution |
 | D12 | Testability | Dependency injection for exec | Tests inject mock exec |
 | D13 | Working directory | Resolve to absolute at creation | Store absolute path |
 | D14 | Git staging | `git add -u` (not `-A`) | Avoids staging secrets |
-| D15 | Timeout | Wrapper script with kill | Background + timeout + SIGTERM/SIGKILL |
-| D16 | PATH | Capture at registration | Embed in every plist/crontab entry |
+| D15 | Timeout | Shared executor enforcement | Background + timeout + SIGTERM/SIGKILL |
+| D16 | PATH | Preserve user PATH for scheduled runs | Avoid scheduler-specific PATH issues |
 | D17 | Command field | Natural-language prompt only | Slash commands not supported in scheduled execution |
 
 ### 7.4 Glossary
