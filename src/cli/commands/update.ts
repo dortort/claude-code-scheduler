@@ -9,7 +9,7 @@ import {
   findTask,
   getGlobalSchedulesPath,
 } from '../../config.js';
-import { registerTask } from '../platform.js';
+import { registerTask, unregisterTask } from '../platform.js';
 import { getShimPath } from './init.js';
 import type { ScheduledTask } from '../../types.js';
 
@@ -78,11 +78,26 @@ export async function update(args: UpdateArgs): Promise<UpdateResult> {
   const updated = updateTask(config, existing.id, updates);
   await saveConfig(configPath, updated);
 
-  // Re-register with OS only if schedule changed
-  const scheduleChanged = args.cron !== undefined || args.enabled !== undefined;
+  // Sync with OS scheduler based on enabled/cron changes
+  const cronChanged = args.cron !== undefined;
   let osReregistered = false;
 
-  if (scheduleChanged) {
+  if (args.enabled === false) {
+    // Disabling: unregister from OS scheduler
+    try {
+      await unregisterTask(existing.id);
+      osReregistered = true;
+    } catch (err) {
+      return {
+        success: false,
+        taskId: existing.id,
+        configSaved: true,
+        osReregistered: false,
+        error: (err as Error).message,
+      };
+    }
+  } else if (args.enabled === true || cronChanged) {
+    // Enabling or cron changed: register with OS scheduler
     const updatedTask = findTask(updated, existing.id)!;
     try {
       await registerTask(updatedTask, getShimPath());
