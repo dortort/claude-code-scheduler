@@ -26,7 +26,8 @@ jobs:
       - run: npm run build
       - name: Publish with OIDC provenance
         run: |
-          # Strip the _authToken line so npm uses OIDC trusted publishing
-          # instead of the (potentially invalid) NODE_AUTH_TOKEN secret
+          # Strip _authToken from npmrc and clear env so npm falls through to OIDC
           sed -i '/_authToken/d' "$NPM_CONFIG_USERCONFIG"
           npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ""
