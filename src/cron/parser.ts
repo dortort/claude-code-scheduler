@@ -143,6 +143,21 @@ export function naturalLanguageToCron(input: string): string | undefined {
 }
 
 /**
+ * Convert a future ISO timestamp to a one-time cron expression.
+ * Uses UTC field extraction. Throws if the timestamp is invalid or in the past.
+ */
+export function timestampToCron(isoTimestamp: string, _timezone?: string): string {
+  const date = new Date(isoTimestamp);
+  if (isNaN(date.getTime())) throw new Error('Invalid timestamp');
+  if (date.getTime() <= Date.now()) throw new Error('Timestamp must be in the future');
+  const minute = date.getUTCMinutes();
+  const hour = date.getUTCHours();
+  const day = date.getUTCDate();
+  const month = date.getUTCMonth() + 1;
+  return `${minute} ${hour} ${day} ${month} *`;
+}
+
+/**
  * Named cron presets for common schedules.
  */
 export const CRON_PRESETS: Record<string, string> = {

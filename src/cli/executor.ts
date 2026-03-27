@@ -371,6 +371,11 @@ export async function run(taskId: string): Promise<void> {
     });
 
     process.exitCode = result.exitCode;
+
+    // Write .done marker for once-tasks so sync can clean them up
+    if (task.trigger.type === 'once') {
+      await writeFile(path.join(logsDir, `${task.id}.done`), '', 'utf-8');
+    }
   } finally {
     await releaseLock(lockDir);
   }

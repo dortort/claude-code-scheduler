@@ -15,6 +15,7 @@ import {
   buildCrontabContent,
   type LinuxSchedulerTask,
 } from '../schedulers/linux.js';
+import { timestampToCron } from '../cron/parser.js';
 import type { ScheduledTask } from '../types.js';
 
 /**
@@ -90,7 +91,11 @@ async function unregisterDarwin(taskId: string): Promise<void> {
 
 async function registerLinux(task: ScheduledTask, shimPath: string): Promise<void> {
   const logsDir = getLogsDir();
-  const cronExpr = task.trigger.type === 'cron' ? task.trigger.expression : undefined;
+  const cronExpr = task.trigger.type === 'cron'
+    ? task.trigger.expression
+    : task.trigger.type === 'once'
+      ? timestampToCron(task.trigger.timestamp)
+      : undefined;
 
   const linuxTask: LinuxSchedulerTask = {
     id: task.id,

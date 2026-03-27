@@ -8,13 +8,14 @@ import {
   addTask,
   getGlobalSchedulesPath,
 } from '../../config.js';
-import { createTask } from '../../types.js';
+import { createTask, type Trigger } from '../../types.js';
 import { ensureExecutorInstalled, getShimPath } from './init.js';
 import { registerTask } from '../platform.js';
 
 export interface AddArgs {
   name: string;
-  cron: string;
+  cron?: string;
+  at?: string;
   command: string;
   workingDirectory: string;
   timeout?: number;
@@ -33,13 +34,45 @@ export interface AddResult {
 }
 
 export async function add(args: AddArgs): Promise<AddResult> {
-  if (!args.name || !args.cron || !args.command || !args.workingDirectory) {
+  if (!args.name || !args.command || !args.workingDirectory) {
     return {
       success: false,
       configSaved: false,
       osRegistered: false,
-      error: 'Missing required arguments: --name, --cron, --command, --working-directory',
+      error: 'Missing required arguments: --name, --command, --working-directory',
     };
+  }
+
+  if (args.cron && args.at) {
+    return {
+      success: false,
+      configSaved: false,
+      osRegistered: false,
+      error: 'Cannot provide both --cron and --at',
+    };
+  }
+
+  if (!args.cron && !args.at) {
+    return {
+      success: false,
+      configSaved: false,
+      osRegistered: false,
+      error: 'Must provide either --cron or --at',
+    };
+  }
+
+  let trigger: Trigger;
+  if (args.at) {
+    const ts = new Date(args.at);
+    if (isNaN(ts.getTime())) {
+      return { success: false, configSaved: false, osRegistered: false, error: 'Invalid --at timestamp' };
+    }
+    if (ts.getTime() <= Date.now()) {
+      return { success: false, configSaved: false, osRegistered: false, error: '--at timestamp must be in the future' };
+    }
+    trigger = { type: 'once', timestamp: args.at };
+  } else {
+    trigger = { type: 'cron', expression: args.cron!, timezone: 'local' };
   }
 
   // Ensure executor is installed
@@ -56,7 +89,7 @@ export async function add(args: AddArgs): Promise<AddResult> {
   const task = createTask({
     name: args.name,
     description: args.description,
-    trigger: { type: 'cron', expression: args.cron, timezone: 'local' },
+    trigger,
     execution: {
       command: args.command,
       workingDirectory: args.workingDirectory,
