@@ -24,16 +24,7 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
-      - name: Debug OIDC environment
-        run: |
-          echo "npm: $(npm --version)"
-          echo "node: $(node --version)"
-          echo "OIDC URL set: $([[ -n "$ACTIONS_ID_TOKEN_REQUEST_URL" ]] && echo yes || echo no)"
-          echo "OIDC TOKEN set: $([[ -n "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" ]] && echo yes || echo no)"
-          cat "$NPM_CONFIG_USERCONFIG"
       - name: Publish with OIDC provenance
-        run: |
-          sed -i '/_authToken/d' "$NPM_CONFIG_USERCONFIG"
-          npm publish --provenance --access public
+        run: npm publish --provenance --access public --userconfig /dev/null
         env:
           NODE_AUTH_TOKEN: ""
