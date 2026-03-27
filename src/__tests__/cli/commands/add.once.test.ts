@@ -42,7 +42,7 @@ beforeEach(() => {
   });
   vi.mocked(configMod.getGlobalSchedulesPath).mockReturnValue('/fake/config.json');
   vi.mocked(platform.registerTask).mockResolvedValue(undefined);
-  vi.mocked(initMod.ensureExecutorInstalled).mockResolvedValue({ success: true, shimPath: '/fake/shim' } as any);
+  vi.mocked(initMod.ensureExecutorInstalled).mockResolvedValue({ success: true, shimPath: '/fake/shim' } as unknown as Awaited<ReturnType<typeof initMod.ensureExecutorInstalled>>);
   vi.mocked(initMod.getShimPath).mockReturnValue('/fake/shim');
 });
 
