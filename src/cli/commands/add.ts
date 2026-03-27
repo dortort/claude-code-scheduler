@@ -70,7 +70,7 @@ export async function add(args: AddArgs): Promise<AddResult> {
     if (ts.getTime() <= Date.now()) {
       return { success: false, configSaved: false, osRegistered: false, error: '--at timestamp must be in the future' };
     }
-    trigger = { type: 'once', timestamp: args.at };
+    trigger = { type: 'once', timestamp: args.at, timezone: 'local' };
   } else {
     trigger = { type: 'cron', expression: args.cron!, timezone: 'local' };
   }

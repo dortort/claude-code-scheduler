@@ -208,6 +208,7 @@ export interface CreateTaskInput {
       basePath?: string;
       branchPrefix?: string;
       remoteName?: string;
+      sensitiveFilePolicy?: 'block' | 'warn' | 'allow';
     };
     memory?: {
       enabled: boolean;
@@ -241,6 +242,7 @@ export function createTask(input: CreateTaskInput): ScheduledTask {
         basePath: input.execution.worktree.basePath,
         branchPrefix: input.execution.worktree.branchPrefix,
         remoteName: input.execution.worktree.remoteName ?? 'origin',
+        sensitiveFilePolicy: input.execution.worktree.sensitiveFilePolicy ?? 'block',
       } : undefined,
       memory: input.execution.memory ? {
         enabled: input.execution.memory.enabled,
