@@ -150,9 +150,12 @@ function spawnClaude(
     // cleanup in runWorktree) can execute before the executor exits.
     let childExited = false;
     const onSigterm = () => {
-      child.kill('SIGTERM');
+      if (childExited) return;
+      try { child.kill('SIGTERM'); } catch { /* already dead */ }
       setTimeout(() => {
-        if (!childExited) child.kill('SIGKILL');
+        if (!childExited) {
+          try { child.kill('SIGKILL'); } catch { /* already dead */ }
+        }
       }, 3000);
     };
     process.on('SIGTERM', onSigterm);

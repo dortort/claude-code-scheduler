@@ -38,7 +38,7 @@ function getDateParts(date: Date, timezone?: string): { hour: number; minute: nu
     const dayFmt = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: tz });
     const dateFmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: tz });
 
-    const hour = parseInt(hourFmt.format(date), 10);
+    const hour = parseInt(hourFmt.format(date), 10) % 24;
     const minute = parseInt(minuteFmt.format(date), 10);
     const dayName = dayFmt.format(date);
     const dayIndex = DAY_ABBR.indexOf(dayName as typeof DAY_ABBR[number]);
