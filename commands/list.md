@@ -65,7 +65,7 @@ For each task display:
 - **Source**: global / project
 - **Enabled**: yes / no
 - **Schedule**: human-readable cron description from step 4
-- **Next run**: relative time (e.g. "in 3h 20m"), derived from the ISO timestamp
+- **Next run**: use the `relativeTime` field from step 4 output directly — do not compute or reformat it
 - **Last status**: from history — success / failure / timeout / never run
 - **Working directory**
 - **Worktree**: yes / no
