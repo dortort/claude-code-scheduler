@@ -83,9 +83,10 @@ async function acquireLock(taskId: string, timeout: number): Promise<string> {
     }
   }
 
-  // Write PID and start time for identity verification on kill
-  await writeFile(path.join(lockDir, 'pid'), String(process.pid), 'utf-8');
+  // Write startTime before PID so the lock is verifiable from the moment
+  // the PID becomes visible to killRunningTask.
   await writeFile(path.join(lockDir, 'startTime'), String(Date.now()), 'utf-8');
+  await writeFile(path.join(lockDir, 'pid'), String(process.pid), 'utf-8');
   return lockDir;
 }
 
@@ -359,6 +360,13 @@ export async function run(taskId: string): Promise<void> {
   const startedAt = new Date().toISOString();
 
   try {
+    // If SIGTERM arrived between handler registration and here, abort
+    // before spawning the child process.
+    if (process.exitCode === 143) {
+      await writeStatus(logsDir, task.id, 'failure:sigterm');
+      return;
+    }
+
     const isWorktree = task.execution.worktree?.enabled === true;
     let result: SpawnResult & { worktreePath?: string; worktreeBranch?: string; pushed?: boolean };
 
