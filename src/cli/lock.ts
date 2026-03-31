@@ -94,8 +94,12 @@ export async function killRunningTask(taskId: string): Promise<boolean> {
     }
   }
 
-  // Poll for exit with 200ms intervals, up to 5 seconds
-  const deadline = Date.now() + 5000;
+  // Poll for exit with 200ms intervals, up to 10 seconds.
+  // Do NOT force-kill (SIGKILL) — the executor may be in post-child cleanup
+  // (commitAndPush, removeWorktree) which must complete to avoid leaking
+  // worktrees. The top-level SIGTERM handler sets process.exitCode and lets
+  // finally blocks finish naturally.
+  const deadline = Date.now() + 10000;
   let alive = true;
   while (Date.now() < deadline) {
     await new Promise(r => setTimeout(r, 200));
@@ -107,20 +111,10 @@ export async function killRunningTask(taskId: string): Promise<boolean> {
     }
   }
 
-  // Force kill if still alive
-  if (alive) {
-    try {
-      process.kill(pid, 'SIGKILL');
-    } catch (e) {
-      if (errnoCode(e) === 'EPERM') {
-        throw new Error(`Permission denied when sending SIGKILL to process ${pid} for task ${taskId}`, { cause: e });
-      }
-    }
-    // Brief yield for kernel to reap
-    await new Promise(r => setTimeout(r, 100));
+  if (!alive) {
+    await rm(lockPath, { recursive: true, force: true });
   }
-
-  // Clean up stale lock
-  await rm(lockPath, { recursive: true, force: true });
+  // If still alive after 10s, the executor is cleaning up — leave it running.
+  // The lock will be released by the executor's own releaseLock() in its finally block.
   return true;
 }
