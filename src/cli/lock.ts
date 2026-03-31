@@ -33,12 +33,12 @@ function errnoCode(e: unknown): string | undefined {
  * time as recorded in the lock file. This prevents killing an unrelated
  * process that reused the PID after a crash or reboot.
  *
- * Falls back to true (allow kill) if start time can't be determined,
- * since older lock files may not have a startTime file.
+ * Returns false (don't kill) if the lock has no startTime, since legacy
+ * locks from before this change can't be verified and may have reused PIDs.
  */
 async function verifyProcessIdentity(pid: number, taskId: string): Promise<boolean> {
   const lockStartTime = await readLockStartTime(taskId);
-  if (lockStartTime === null) return true;
+  if (lockStartTime === null) return false;
 
   try {
     const output = execFileSync('ps', ['-o', 'lstart=', '-p', String(pid)], {
