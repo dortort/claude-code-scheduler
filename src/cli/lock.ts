@@ -45,14 +45,14 @@ async function verifyProcessIdentity(pid: number, taskId: string): Promise<boole
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
-    if (!output) return true;
+    if (!output) return false;
 
     const processStart = new Date(output).getTime();
-    if (isNaN(processStart)) return true;
+    if (isNaN(processStart)) return false;
 
     return Math.abs(processStart - lockStartTime) < 5000;
   } catch {
-    return true;
+    return false;
   }
 }
 

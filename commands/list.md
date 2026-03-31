@@ -55,7 +55,7 @@ Then stop.
 Use a single `node -e` call with the compiled modules (never `src/`):
 
 ```bash
-~/.claude/bin/claude-scheduler-cli humanize --tasks '[{"id":"...","cron":"..."}]'
+~/.claude/bin/claude-scheduler-cli humanize --tasks '[{"id":"...","cron":"...","timezone":"..."}]'
 ```
 
 ### Step 5 — Output table
