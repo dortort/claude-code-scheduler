@@ -33,7 +33,7 @@ export async function killRunningTask(taskId: string): Promise<boolean> {
       return false;
     }
     if ((e as NodeJS.ErrnoException).code === 'EPERM') {
-      throw new Error(`Permission denied when checking process ${pid} for task ${taskId}`);
+      throw new Error(`Permission denied when checking process ${pid} for task ${taskId}`, { cause: e });
     }
     throw e;
   }
@@ -43,7 +43,7 @@ export async function killRunningTask(taskId: string): Promise<boolean> {
     process.kill(-pid, 'SIGTERM');
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'EPERM') {
-      throw new Error(`Permission denied when killing process group ${pid} for task ${taskId}`);
+      throw new Error(`Permission denied when killing process group ${pid} for task ${taskId}`, { cause: e });
     }
     // ESRCH: already dead, continue to cleanup
   }
@@ -59,7 +59,7 @@ export async function killRunningTask(taskId: string): Promise<boolean> {
       process.kill(-pid, 'SIGKILL');
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code === 'EPERM') {
-        throw new Error(`Permission denied when sending SIGKILL to process group ${pid} for task ${taskId}`);
+        throw new Error(`Permission denied when sending SIGKILL to process group ${pid} for task ${taskId}`, { cause: e });
       }
       // ESRCH: already dead
     }
