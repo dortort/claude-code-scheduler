@@ -17,6 +17,7 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 
 import { loadConfig, loadMergedConfig, findTask, getLogsDir, getHistoryPath } from '../config.js';
+import { getLockPath } from './lock.js';
 import { recordExecution } from '../history/index.js';
 import { ensureLogsDir, getLogPaths, readLog } from '../logs/index.js';
 import {
@@ -40,7 +41,7 @@ async function fileMtime(filePath: string): Promise<number> {
 }
 
 async function acquireLock(taskId: string, timeout: number): Promise<string> {
-  const lockDir = `/tmp/claude-scheduler-${taskId}.lock`;
+  const lockDir = getLockPath(taskId);
 
   try {
     await mkdir(lockDir);
