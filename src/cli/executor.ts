@@ -83,8 +83,9 @@ async function acquireLock(taskId: string, timeout: number): Promise<string> {
     }
   }
 
-  // Write PID file
+  // Write PID and start time for identity verification on kill
   await writeFile(path.join(lockDir, 'pid'), String(process.pid), 'utf-8');
+  await writeFile(path.join(lockDir, 'startTime'), String(Date.now()), 'utf-8');
   return lockDir;
 }
 
@@ -342,6 +343,17 @@ export async function run(taskId: string): Promise<void> {
 
   const startedAt = new Date().toISOString();
 
+  // Install a top-level SIGTERM handler that stays active through the entire
+  // executor lifecycle (including post-child cleanup like commitAndPush,
+  // removeWorktree, releaseLock). This prevents Node from exiting immediately
+  // on SIGTERM, allowing finally blocks to complete. During spawnClaude(),
+  // a more specific handler also kills the child process.
+  const onTopLevelSigterm = () => {
+    // Set exit code so the executor exits after cleanup finishes
+    process.exitCode = 143; // 128 + 15 (SIGTERM)
+  };
+  process.on('SIGTERM', onTopLevelSigterm);
+
   try {
     const isWorktree = task.execution.worktree?.enabled === true;
     let result: SpawnResult & { worktreePath?: string; worktreeBranch?: string; pushed?: boolean };
@@ -392,6 +404,7 @@ export async function run(taskId: string): Promise<void> {
     }
   } finally {
     await releaseLock(lockDir);
+    process.removeListener('SIGTERM', onTopLevelSigterm);
   }
 }
 
