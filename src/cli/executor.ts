@@ -144,8 +144,20 @@ function spawnClaude(
       }, 5000);
     }, options.timeout * 1000);
 
+    // Handle SIGTERM gracefully: kill the child process and let the
+    // promise resolve normally so that finally blocks (e.g. worktree
+    // cleanup in runWorktree) can execute before the executor exits.
+    const onSigterm = () => {
+      child.kill('SIGTERM');
+      setTimeout(() => {
+        if (!child.killed) child.kill('SIGKILL');
+      }, 3000);
+    };
+    process.on('SIGTERM', onSigterm);
+
     child.on('close', (code) => {
       clearTimeout(timer);
+      process.removeListener('SIGTERM', onSigterm);
       closeSync(stdoutFd);
       closeSync(stderrFd);
       resolve({ exitCode: code ?? 1, timedOut });
@@ -153,6 +165,7 @@ function spawnClaude(
 
     child.on('error', () => {
       clearTimeout(timer);
+      process.removeListener('SIGTERM', onSigterm);
       closeSync(stdoutFd);
       closeSync(stderrFd);
       resolve({ exitCode: 1, timedOut: false });
