@@ -1,33 +1,31 @@
-import { readFile } from 'node:fs/promises';
-import { rm } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 
 export function getLockPath(taskId: string): string {
   return `/tmp/claude-scheduler-${taskId}.lock`;
 }
 
-export async function readLockPid(taskId: string): Promise<number | null> {
-  const lockPath = getLockPath(taskId);
+async function readLockNumber(taskId: string, file: string): Promise<number | null> {
   try {
-    const pidStr = await readFile(path.join(lockPath, 'pid'), 'utf-8');
-    const pid = parseInt(pidStr.trim(), 10);
-    if (isNaN(pid)) return null;
-    return pid;
+    const str = await readFile(path.join(getLockPath(taskId), file), 'utf-8');
+    const n = parseInt(str.trim(), 10);
+    return isNaN(n) ? null : n;
   } catch {
     return null;
   }
 }
 
+export async function readLockPid(taskId: string): Promise<number | null> {
+  return readLockNumber(taskId, 'pid');
+}
+
 async function readLockStartTime(taskId: string): Promise<number | null> {
-  const lockPath = getLockPath(taskId);
-  try {
-    const str = await readFile(path.join(lockPath, 'startTime'), 'utf-8');
-    const ts = parseInt(str.trim(), 10);
-    if (isNaN(ts)) return null;
-    return ts;
-  } catch {
-    return null;
-  }
+  return readLockNumber(taskId, 'startTime');
+}
+
+function errnoCode(e: unknown): string | undefined {
+  return (e as NodeJS.ErrnoException).code;
 }
 
 /**
@@ -40,21 +38,20 @@ async function readLockStartTime(taskId: string): Promise<number | null> {
  */
 async function verifyProcessIdentity(pid: number, taskId: string): Promise<boolean> {
   const lockStartTime = await readLockStartTime(taskId);
-  if (lockStartTime === null) return true; // legacy lock without startTime
+  if (lockStartTime === null) return true;
 
-  // Get process start time via ps (macOS/Linux)
   try {
-    const { execSync } = await import('node:child_process');
-    const output = execSync(`ps -o lstart= -p ${pid} 2>/dev/null`, { encoding: 'utf-8' }).trim();
-    if (!output) return true; // can't determine, allow kill
+    const output = execFileSync('ps', ['-o', 'lstart=', '-p', String(pid)], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    if (!output) return true;
 
     const processStart = new Date(output).getTime();
-    if (isNaN(processStart)) return true; // can't parse, allow kill
+    if (isNaN(processStart)) return true;
 
-    // Allow 5-second tolerance for startup delay between lock write and ps
     return Math.abs(processStart - lockStartTime) < 5000;
   } catch {
-    // ps failed (process may not exist) — let the caller handle via kill(pid, 0)
     return true;
   }
 }
@@ -65,26 +62,25 @@ export async function killRunningTask(taskId: string): Promise<boolean> {
 
   if (pid === null) return false;
 
-  // Check if process is alive
+  // Verify this is our executor process, not a PID-reuse collision
+  const isOurs = await verifyProcessIdentity(pid, taskId);
+  if (!isOurs) {
+    await rm(lockPath, { recursive: true, force: true });
+    return false;
+  }
+
+  // Check if process is still alive after identity verification
   try {
     process.kill(pid, 0);
   } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === 'ESRCH') {
+    if (errnoCode(e) === 'ESRCH') {
       await rm(lockPath, { recursive: true, force: true });
       return false;
     }
-    if ((e as NodeJS.ErrnoException).code === 'EPERM') {
+    if (errnoCode(e) === 'EPERM') {
       throw new Error(`Permission denied when checking process ${pid} for task ${taskId}`, { cause: e });
     }
     throw e;
-  }
-
-  // Verify this is actually our executor process, not a PID-reuse collision
-  const isOurs = await verifyProcessIdentity(pid, taskId);
-  if (!isOurs) {
-    // Stale lock with reused PID — clean up lock but don't kill
-    await rm(lockPath, { recursive: true, force: true });
-    return false;
   }
 
   // Send SIGTERM to the executor process only (not process group).
@@ -93,38 +89,38 @@ export async function killRunningTask(taskId: string): Promise<boolean> {
   try {
     process.kill(pid, 'SIGTERM');
   } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === 'EPERM') {
+    if (errnoCode(e) === 'EPERM') {
       throw new Error(`Permission denied when killing process ${pid} for task ${taskId}`, { cause: e });
     }
-    // ESRCH: already dead, continue to cleanup
   }
 
-  // Wait 5 seconds for graceful shutdown (executor needs time for worktree cleanup)
-  await new Promise(resolve => setTimeout(resolve, 5000));
+  // Poll for exit with 200ms intervals, up to 5 seconds
+  const deadline = Date.now() + 5000;
+  let alive = true;
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 200));
+    try {
+      process.kill(pid, 0);
+    } catch {
+      alive = false;
+      break;
+    }
+  }
 
-  // Check if still alive
-  try {
-    process.kill(pid, 0);
-    // Still alive — force kill
+  // Force kill if still alive
+  if (alive) {
     try {
       process.kill(pid, 'SIGKILL');
     } catch (e) {
-      if ((e as NodeJS.ErrnoException).code === 'EPERM') {
+      if (errnoCode(e) === 'EPERM') {
         throw new Error(`Permission denied when sending SIGKILL to process ${pid} for task ${taskId}`, { cause: e });
       }
-      // ESRCH: already dead
     }
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code !== 'ESRCH') throw e;
-    // Already dead — fine
+    // Brief yield for kernel to reap
+    await new Promise(r => setTimeout(r, 100));
   }
 
-  // Clean up lock if process is confirmed dead
-  try {
-    process.kill(pid, 0);
-  } catch {
-    await rm(lockPath, { recursive: true, force: true });
-  }
-
+  // Clean up stale lock
+  await rm(lockPath, { recursive: true, force: true });
   return true;
 }
