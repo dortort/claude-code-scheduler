@@ -38,28 +38,30 @@ export async function killRunningTask(taskId: string): Promise<boolean> {
     throw e;
   }
 
-  // Send SIGTERM to process group
+  // Send SIGTERM to the executor process only (not process group).
+  // The executor has a SIGTERM handler that kills its child claude process
+  // and exits normally, allowing finally blocks (worktree cleanup) to run.
   try {
-    process.kill(-pid, 'SIGTERM');
+    process.kill(pid, 'SIGTERM');
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'EPERM') {
-      throw new Error(`Permission denied when killing process group ${pid} for task ${taskId}`, { cause: e });
+      throw new Error(`Permission denied when killing process ${pid} for task ${taskId}`, { cause: e });
     }
     // ESRCH: already dead, continue to cleanup
   }
 
-  // Wait 3 seconds
-  await new Promise(resolve => setTimeout(resolve, 3000));
+  // Wait 5 seconds for graceful shutdown (executor needs time for worktree cleanup)
+  await new Promise(resolve => setTimeout(resolve, 5000));
 
   // Check if still alive
   try {
     process.kill(pid, 0);
-    // Still alive — send SIGKILL
+    // Still alive — force kill
     try {
-      process.kill(-pid, 'SIGKILL');
+      process.kill(pid, 'SIGKILL');
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code === 'EPERM') {
-        throw new Error(`Permission denied when sending SIGKILL to process group ${pid} for task ${taskId}`, { cause: e });
+        throw new Error(`Permission denied when sending SIGKILL to process ${pid} for task ${taskId}`, { cause: e });
       }
       // ESRCH: already dead
     }
@@ -68,6 +70,14 @@ export async function killRunningTask(taskId: string): Promise<boolean> {
     // Already dead — fine
   }
 
-  await rm(lockPath, { recursive: true, force: true });
+  // Don't remove the lock dir here — the executor's releaseLock() handles it
+  // during graceful shutdown. Only clean up if the process is confirmed dead.
+  try {
+    process.kill(pid, 0);
+  } catch {
+    // Process is dead, safe to clean up stale lock
+    await rm(lockPath, { recursive: true, force: true });
+  }
+
   return true;
 }
