@@ -24,37 +24,64 @@ export interface HumanizeOutput {
 
 const DAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
-/**
- * Format a Date for display in the given IANA timezone (or local if not specified).
- * Uses Intl.DateTimeFormat for timezone-aware formatting.
- */
-function getDateParts(date: Date, timezone?: string): { hour: number; minute: number; day: number; dateStr: string; tzLabel: string } {
+interface DateParts {
+  hour: number;
+  minute: number;
+  day: number;
+  year: number;
+  month: number;
+  date: number;
+  tzLabel: string;
+}
+
+function getDateParts(d: Date, timezone?: string): DateParts {
   const tz = timezone && timezone !== 'local' ? timezone : undefined;
   const tzLabel = tz ?? 'local';
 
   if (tz) {
-    const hourFmt = new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false, timeZone: tz });
-    const minuteFmt = new Intl.DateTimeFormat('en-US', { minute: 'numeric', timeZone: tz });
-    const dayFmt = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: tz });
-    const dateFmt = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: tz });
+    const parts = new Intl.DateTimeFormat('en-US', {
+      hour: 'numeric', minute: 'numeric', weekday: 'short',
+      year: 'numeric', month: 'numeric', day: 'numeric',
+      hour12: false, timeZone: tz,
+    }).formatToParts(d);
 
-    const hour = parseInt(hourFmt.format(date), 10) % 24;
-    const minute = parseInt(minuteFmt.format(date), 10);
-    const dayName = dayFmt.format(date);
+    const get = (type: string) => {
+      const p = parts.find(p => p.type === type);
+      return p ? parseInt(p.value, 10) : 0;
+    };
+    const dayName = parts.find(p => p.type === 'weekday')?.value ?? '';
     const dayIndex = DAY_ABBR.indexOf(dayName as typeof DAY_ABBR[number]);
-    const dateStr = dateFmt.format(date);
 
-    return { hour, minute, day: dayIndex >= 0 ? dayIndex : date.getUTCDay(), dateStr, tzLabel: tz };
+    return {
+      hour: get('hour') % 24,
+      minute: get('minute'),
+      day: dayIndex >= 0 ? dayIndex : d.getUTCDay(),
+      year: get('year'),
+      month: get('month'),
+      date: get('day'),
+      tzLabel: tz,
+    };
   }
 
-  // Local timezone
   return {
-    hour: date.getHours(),
-    minute: date.getMinutes(),
-    day: date.getDay(),
-    dateStr: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
+    hour: d.getHours(),
+    minute: d.getMinutes(),
+    day: d.getDay(),
+    year: d.getFullYear(),
+    month: d.getMonth() + 1,
+    date: d.getDate(),
     tzLabel,
   };
+}
+
+function sameDate(a: DateParts, b: DateParts): boolean {
+  return a.year === b.year && a.month === b.month && a.date === b.date;
+}
+
+function nextCalendarDay(parts: DateParts): { year: number; month: number; date: number } {
+  // Use Date to handle month/year rollovers
+  const d = new Date(parts.year, parts.month - 1, parts.date + 1);
+  return { year: d.getFullYear(), month: d.getMonth() + 1, date: d.getDate() };
 }
 
 export function formatNextRunTime(next: Date | undefined, timezone?: string): string | null {
@@ -86,13 +113,17 @@ export function formatNextRunTime(next: Date | undefined, timezone?: string): st
   const timeStr = `${hour12}:${nextParts.minute.toString().padStart(2, '0')} ${ampm} ${nextParts.tzLabel}`;
 
   const dayAbbr = DAY_ABBR[nextParts.day];
-  const dayLabel = nextParts.dateStr === nowParts.dateStr ? 'Today' : dayAbbr;
 
-  // Check if tomorrow by comparing date strings
-  const tomorrowDate = new Date(now.getTime() + 86400000);
-  const tomorrowParts = getDateParts(tomorrowDate, timezone);
-  if (nextParts.dateStr === tomorrowParts.dateStr) {
-    return `Tomorrow (${dayAbbr}) at ${timeStr}, ${delta}`;
+  let dayLabel: string;
+  if (sameDate(nextParts, nowParts)) {
+    dayLabel = 'Today';
+  } else {
+    const tomorrow = nextCalendarDay(nowParts);
+    if (nextParts.year === tomorrow.year && nextParts.month === tomorrow.month && nextParts.date === tomorrow.date) {
+      dayLabel = 'Tomorrow';
+    } else {
+      dayLabel = dayAbbr;
+    }
   }
 
   return `${dayLabel} (${dayAbbr}) at ${timeStr}, ${delta}`;
