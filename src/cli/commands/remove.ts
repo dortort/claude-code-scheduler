@@ -9,6 +9,7 @@ import {
   findTask,
   getGlobalSchedulesPath,
 } from '../../config.js';
+import { killRunningTask } from '../lock.js';
 import { unregisterTask } from '../platform.js';
 
 export interface RemoveArgs {
@@ -21,6 +22,7 @@ export interface RemoveResult {
   taskName?: string;
   configSaved: boolean;
   osUnregistered: boolean;
+  processKilled: boolean;
   error?: string;
 }
 
@@ -30,6 +32,7 @@ export async function remove(args: RemoveArgs): Promise<RemoveResult> {
       success: false,
       configSaved: false,
       osUnregistered: false,
+      processKilled: false,
       error: 'Missing required argument: --id',
     };
   }
@@ -43,8 +46,17 @@ export async function remove(args: RemoveArgs): Promise<RemoveResult> {
       success: false,
       configSaved: false,
       osUnregistered: false,
+      processKilled: false,
       error: `Task not found: ${args.id}`,
     };
+  }
+
+  // Kill any running process for this task
+  let processKilled = false;
+  try {
+    processKilled = await killRunningTask(task.id);
+  } catch {
+    // Best-effort: don't fail removal if process kill fails
   }
 
   // Remove from config
@@ -61,6 +73,7 @@ export async function remove(args: RemoveArgs): Promise<RemoveResult> {
       taskName: task.name,
       configSaved: true,
       osUnregistered: false,
+      processKilled,
       error: (err as Error).message,
     };
   }
@@ -71,5 +84,6 @@ export async function remove(args: RemoveArgs): Promise<RemoveResult> {
     taskName: task.name,
     configSaved: true,
     osUnregistered: true,
+    processKilled,
   };
 }
