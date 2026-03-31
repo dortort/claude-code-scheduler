@@ -338,26 +338,25 @@ export async function run(taskId: string): Promise<void> {
   const logsDir = getLogsDir();
   await ensureLogsDir(logsDir);
 
+  // Install SIGTERM handler before acquireLock so the executor is protected
+  // from the moment it becomes killable (when PID is written to the lock).
+  // This prevents Node from exiting immediately on SIGTERM, allowing finally
+  // blocks (worktree cleanup, lock release) to complete.
+  const onTopLevelSigterm = () => {
+    process.exitCode = 143; // 128 + 15 (SIGTERM)
+  };
+  process.on('SIGTERM', onTopLevelSigterm);
+
   let lockDir: string;
   try {
     lockDir = await acquireLock(task.id, task.execution.timeout);
   } catch (err) {
+    process.removeListener('SIGTERM', onTopLevelSigterm);
     console.error((err as Error).message);
     return;
   }
 
   const startedAt = new Date().toISOString();
-
-  // Install a top-level SIGTERM handler that stays active through the entire
-  // executor lifecycle (including post-child cleanup like commitAndPush,
-  // removeWorktree, releaseLock). This prevents Node from exiting immediately
-  // on SIGTERM, allowing finally blocks to complete. During spawnClaude(),
-  // a more specific handler also kills the child process.
-  const onTopLevelSigterm = () => {
-    // Set exit code so the executor exits after cleanup finishes
-    process.exitCode = 143; // 128 + 15 (SIGTERM)
-  };
-  process.on('SIGTERM', onTopLevelSigterm);
 
   try {
     const isWorktree = task.execution.worktree?.enabled === true;

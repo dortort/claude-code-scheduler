@@ -62,10 +62,11 @@ export async function killRunningTask(taskId: string): Promise<boolean> {
 
   if (pid === null) return false;
 
-  // Verify this is our executor process, not a PID-reuse collision
+  // Verify this is our executor process, not a PID-reuse collision.
+  // If identity can't be verified, leave the lock intact to prevent
+  // duplicate executions — the executor's releaseLock() will clean up.
   const isOurs = await verifyProcessIdentity(pid, taskId);
   if (!isOurs) {
-    await rm(lockPath, { recursive: true, force: true });
     return false;
   }
 
