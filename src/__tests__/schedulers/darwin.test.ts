@@ -4,7 +4,10 @@ import {
   cronToCalendarInterval,
   getPlistPath,
   getLaunchctlLabel,
+  adjustCalendarIntervalsForTimezone,
+  computeTimezoneOffsetMinutes,
   type DarwinSchedulerTask,
+  type CalendarInterval,
 } from '../../schedulers/darwin.js';
 
 const sampleTask: DarwinSchedulerTask = {
@@ -160,5 +163,147 @@ describe('generatePlist', () => {
     expect(plist).toContain('<key>RunAtLoad</key>');
     expect(plist).toContain('<true/>');
     expect(plist).not.toContain('StartCalendarInterval');
+  });
+
+  it('generates identical plist when timezone is undefined (regression guard)', () => {
+    const withoutTz = generatePlist(sampleTask);
+    const withLocalTz: DarwinSchedulerTask = { ...sampleTask, timezone: undefined };
+    const withLocal = generatePlist(withLocalTz);
+    expect(withoutTz).toBe(withLocal);
+  });
+});
+
+describe('computeTimezoneOffsetMinutes', () => {
+  it('returns a number', () => {
+    const offset = computeTimezoneOffsetMinutes('America/New_York');
+    expect(typeof offset).toBe('number');
+  });
+
+  it('returns 0 for same timezone as system local', () => {
+    // Get the system timezone via Intl
+    const systemTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const offset = computeTimezoneOffsetMinutes(systemTz);
+    expect(offset).toBe(0);
+  });
+
+  it('produces consistent relative offsets between two timezones', () => {
+    // Tokyo is UTC+9 (no DST), NY is UTC-5 (EST) or UTC-4 (EDT).
+    // Tokyo is 13h (EDT) or 14h (EST) ahead of NY.
+    // computeTimezoneOffsetMinutes returns (local - target).
+    // (local - NY) - (local - Tokyo) = Tokyo - NY = 13*60 or 14*60
+    const toTokyo = computeTimezoneOffsetMinutes('Asia/Tokyo');
+    const toNY = computeTimezoneOffsetMinutes('America/New_York');
+    const tokyoAheadOfNY = toNY - toTokyo;
+    expect(tokyoAheadOfNY).toBeGreaterThanOrEqual(13 * 60);
+    expect(tokyoAheadOfNY).toBeLessThanOrEqual(14 * 60);
+  });
+});
+
+describe('adjustCalendarIntervalsForTimezone', () => {
+  it('returns intervals unchanged when offset is 0', () => {
+    const intervals: CalendarInterval[] = [{ Hour: 9, Minute: 0 }];
+    const result = adjustCalendarIntervalsForTimezone(intervals, 0);
+    expect(result.intervals).toEqual([{ Hour: 9, Minute: 0 }]);
+    expect(result.crossesDayBoundary).toBe(false);
+  });
+
+  it('adjusts hours forward with positive offset (no wrap)', () => {
+    const intervals: CalendarInterval[] = [{ Hour: 9, Minute: 0 }];
+    const result = adjustCalendarIntervalsForTimezone(intervals, 300); // +5 hours
+    expect(result.intervals).toEqual([{ Hour: 14, Minute: 0 }]);
+    expect(result.crossesDayBoundary).toBe(false);
+  });
+
+  it('adjusts hours backward with negative offset (no wrap)', () => {
+    const intervals: CalendarInterval[] = [{ Hour: 14, Minute: 0 }];
+    const result = adjustCalendarIntervalsForTimezone(intervals, -300); // -5 hours
+    expect(result.intervals).toEqual([{ Hour: 9, Minute: 0 }]);
+    expect(result.crossesDayBoundary).toBe(false);
+  });
+
+  it('wraps hour forward past 23 and adjusts Weekday', () => {
+    const intervals: CalendarInterval[] = [{ Hour: 23, Minute: 0, Weekday: 1 }]; // Monday 23:00
+    const result = adjustCalendarIntervalsForTimezone(intervals, 300); // +5 hours
+    expect(result.intervals).toEqual([{ Hour: 4, Minute: 0, Weekday: 2 }]); // Tuesday 04:00
+    expect(result.crossesDayBoundary).toBe(false);
+  });
+
+  it('wraps hour backward below 0 and adjusts Weekday', () => {
+    const intervals: CalendarInterval[] = [{ Hour: 1, Minute: 0, Weekday: 0 }]; // Sunday 01:00
+    const result = adjustCalendarIntervalsForTimezone(intervals, -300); // -5 hours
+    expect(result.intervals).toEqual([{ Hour: 20, Minute: 0, Weekday: 6 }]); // Saturday 20:00
+    expect(result.crossesDayBoundary).toBe(false);
+  });
+
+  it('wraps Weekday from Saturday forward to Sunday', () => {
+    const intervals: CalendarInterval[] = [{ Hour: 23, Minute: 0, Weekday: 6 }]; // Saturday 23:00
+    const result = adjustCalendarIntervalsForTimezone(intervals, 120); // +2 hours
+    expect(result.intervals).toEqual([{ Hour: 1, Minute: 0, Weekday: 0 }]); // Sunday 01:00
+  });
+
+  it('handles fractional offset (India +5:30)', () => {
+    const intervals: CalendarInterval[] = [{ Hour: 9, Minute: 0 }];
+    const result = adjustCalendarIntervalsForTimezone(intervals, 330); // +5h30m
+    expect(result.intervals).toEqual([{ Hour: 14, Minute: 30 }]);
+  });
+
+  it('handles minute overflow from fractional offset', () => {
+    const intervals: CalendarInterval[] = [{ Hour: 9, Minute: 45 }];
+    const result = adjustCalendarIntervalsForTimezone(intervals, 330); // +5h30m
+    // 45 + 30 = 75 → Minute: 15, hourCarry: 1 → 9 + 5 + 1 = 15
+    expect(result.intervals).toEqual([{ Hour: 15, Minute: 15 }]);
+  });
+
+  it('sets crossesDayBoundary when Day field wraps forward', () => {
+    const intervals: CalendarInterval[] = [{ Hour: 23, Minute: 0, Day: 15 }];
+    const result = adjustCalendarIntervalsForTimezone(intervals, 300); // +5 hours
+    expect(result.intervals).toEqual([{ Hour: 4, Minute: 0, Day: 16 }]);
+    expect(result.crossesDayBoundary).toBe(true);
+  });
+
+  it('clamps Day to 28 and adjusts Month when Day wraps below 1', () => {
+    const intervals: CalendarInterval[] = [{ Hour: 1, Minute: 0, Day: 1, Month: 3 }]; // Mar 1 01:00
+    const result = adjustCalendarIntervalsForTimezone(intervals, -300); // -5 hours
+    expect(result.intervals).toEqual([{ Hour: 20, Minute: 0, Day: 28, Month: 2 }]); // Feb 28 20:00
+    expect(result.crossesDayBoundary).toBe(true);
+  });
+
+  it('wraps Month from January to December when Day wraps below 1', () => {
+    const intervals: CalendarInterval[] = [{ Hour: 1, Minute: 0, Day: 1, Month: 1 }]; // Jan 1 01:00
+    const result = adjustCalendarIntervalsForTimezone(intervals, -300); // -5 hours
+    expect(result.intervals).toEqual([{ Hour: 20, Minute: 0, Day: 28, Month: 12 }]); // Dec 28 20:00
+    expect(result.crossesDayBoundary).toBe(true);
+  });
+
+  it('wraps Day forward past 28 and adjusts Month', () => {
+    const intervals: CalendarInterval[] = [{ Hour: 23, Minute: 0, Day: 28, Month: 2 }]; // Feb 28 23:00
+    const result = adjustCalendarIntervalsForTimezone(intervals, 300); // +5 hours
+    expect(result.intervals).toEqual([{ Hour: 4, Minute: 0, Day: 1, Month: 3 }]); // Mar 1 04:00
+    expect(result.crossesDayBoundary).toBe(true);
+  });
+
+  it('wraps Month from December to January when Day wraps forward', () => {
+    const intervals: CalendarInterval[] = [{ Hour: 23, Minute: 0, Day: 28, Month: 12 }];
+    const result = adjustCalendarIntervalsForTimezone(intervals, 300);
+    expect(result.intervals).toEqual([{ Hour: 4, Minute: 0, Day: 1, Month: 1 }]);
+    expect(result.crossesDayBoundary).toBe(true);
+  });
+
+  it('does not set crossesDayBoundary for Weekday-only wrap (no Day)', () => {
+    const intervals: CalendarInterval[] = [{ Hour: 23, Minute: 0, Weekday: 3 }];
+    const result = adjustCalendarIntervalsForTimezone(intervals, 120);
+    expect(result.crossesDayBoundary).toBe(false);
+  });
+
+  it('adjusts multiple intervals independently', () => {
+    const intervals: CalendarInterval[] = [
+      { Hour: 9, Minute: 0 },
+      { Hour: 17, Minute: 0 },
+    ];
+    const result = adjustCalendarIntervalsForTimezone(intervals, 300);
+    expect(result.intervals).toEqual([
+      { Hour: 14, Minute: 0 },
+      { Hour: 22, Minute: 0 },
+    ]);
   });
 });

@@ -39,30 +39,24 @@ export interface AdjustResult {
 export function computeTimezoneOffsetMinutes(targetTz: string): number {
   const now = new Date();
 
-  const localParts = new Intl.DateTimeFormat('en-US', {
+  // Extract full date+time parts to account for day boundaries
+  const fmt = (tz?: string) => new Intl.DateTimeFormat('en-US', {
+    year: 'numeric', month: 'numeric', day: 'numeric',
     hour: 'numeric', minute: 'numeric', hourCycle: 'h23',
-  }).formatToParts(now);
+    ...(tz ? { timeZone: tz } : {}),
+  });
 
-  const targetParts = new Intl.DateTimeFormat('en-US', {
-    hour: 'numeric', minute: 'numeric', hourCycle: 'h23', timeZone: targetTz,
-  }).formatToParts(now);
-
-  const extract = (parts: Intl.DateTimeFormatPart[]) => {
+  const toMinutesSinceEpochDay = (parts: Intl.DateTimeFormatPart[]) => {
+    const day = parseInt(parts.find(p => p.type === 'day')!.value, 10);
     const h = parseInt(parts.find(p => p.type === 'hour')!.value, 10);
     const m = parseInt(parts.find(p => p.type === 'minute')!.value, 10);
-    return h * 60 + m;
+    return day * 1440 + h * 60 + m;
   };
 
-  const localMinutes = extract(localParts);
-  const targetMinutes = extract(targetParts);
+  const localMinutes = toMinutesSinceEpochDay(fmt().formatToParts(now));
+  const targetMinutes = toMinutesSinceEpochDay(fmt(targetTz).formatToParts(now));
 
-  let diff = localMinutes - targetMinutes;
-
-  // Normalize to [-720, +720] range to handle day boundary
-  if (diff > 720) diff -= 1440;
-  if (diff < -720) diff += 1440;
-
-  return diff;
+  return localMinutes - targetMinutes;
 }
 
 /**
