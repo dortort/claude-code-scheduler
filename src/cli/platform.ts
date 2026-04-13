@@ -4,11 +4,14 @@
  */
 
 import fs from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
 import { exec as defaultExec } from '../utils/exec.js';
 import { getLogsDir } from '../config.js';
 import {
   generatePlist,
   getPlistPath,
+  LABEL_PREFIX,
   type DarwinSchedulerTask,
 } from '../schedulers/darwin.js';
 import {
@@ -16,6 +19,7 @@ import {
   type LinuxSchedulerTask,
 } from '../schedulers/linux.js';
 import { timestampToCron } from '../cron/parser.js';
+import { getCliShimPath } from './commands/init.js';
 import type { ScheduledTask } from '../types.js';
 
 /**
@@ -76,10 +80,80 @@ async function registerDarwin(task: ScheduledTask, shimPath: string): Promise<vo
 
   await fs.writeFile(plistPath, plistContent, 'utf-8');
   await defaultExec('launchctl', ['load', plistPath]);
+
+  // Ensure daily auto-sync job exists when registering timezone-aware tasks
+  if (darwinTask.timezone) {
+    await ensureTzSyncJob();
+  }
 }
 
 async function unregisterDarwin(taskId: string): Promise<void> {
   const plistPath = getPlistPath(taskId);
+  try {
+    await defaultExec('launchctl', ['unload', plistPath]);
+  } catch { /* not loaded */ }
+  try {
+    await fs.unlink(plistPath);
+  } catch { /* doesn't exist */ }
+}
+
+const TZ_SYNC_LABEL = `${LABEL_PREFIX}.tz-sync`;
+
+function getTzSyncPlistPath(): string {
+  return path.join(os.homedir(), 'Library', 'LaunchAgents', `${TZ_SYNC_LABEL}.plist`);
+}
+
+/**
+ * Register a daily auto-sync launchd job that re-registers timezone-aware tasks.
+ * Runs at 3am local time daily to catch DST transitions.
+ */
+async function ensureTzSyncJob(): Promise<void> {
+  const cliShimPath = getCliShimPath();
+  const logsDir = getLogsDir();
+  const plistPath = getTzSyncPlistPath();
+
+  const plist = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>${TZ_SYNC_LABEL}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>${cliShimPath}</string>
+    <string>sync</string>
+  </array>
+  <key>StandardOutPath</key>
+  <string>${logsDir}/tz-sync.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>${logsDir}/tz-sync.err.log</string>
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict>
+      <key>Hour</key>
+      <integer>3</integer>
+      <key>Minute</key>
+      <integer>0</integer>
+    </dict>
+  </array>
+</dict>
+</plist>
+`;
+
+  try {
+    await defaultExec('launchctl', ['unload', plistPath]);
+  } catch { /* not loaded */ }
+
+  await fs.writeFile(plistPath, plist, 'utf-8');
+  await defaultExec('launchctl', ['load', plistPath]);
+}
+
+/**
+ * Remove the daily auto-sync launchd job.
+ */
+export async function removeTzSyncJob(): Promise<void> {
+  const plistPath = getTzSyncPlistPath();
   try {
     await defaultExec('launchctl', ['unload', plistPath]);
   } catch { /* not loaded */ }
