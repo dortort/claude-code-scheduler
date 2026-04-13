@@ -3,7 +3,7 @@ import { timestampToCron } from '../../cron/parser.js';
 
 describe('timestampToCron', () => {
   it('converts a future UTC timestamp to a cron expression', () => {
-    expect(timestampToCron('2026-04-01T09:30:00Z')).toBe('30 9 1 4 *');
+    expect(timestampToCron('2027-04-01T09:30:00Z')).toBe('30 9 1 4 *');
   });
 
   it('converts Christmas midnight UTC to a cron expression', () => {
