@@ -11,6 +11,7 @@ export interface DarwinSchedulerTask extends SchedulerTask {
   wrapperScriptPath: string;
   programArgs?: string[];
   runAtLoad?: boolean;
+  timezone?: string;
 }
 
 export interface CalendarInterval {
@@ -21,7 +22,133 @@ export interface CalendarInterval {
   Minute?: number;
 }
 
-const LABEL_PREFIX = 'com.claude-scheduler';
+export const LABEL_PREFIX = 'com.claude-scheduler';
+
+export interface AdjustResult {
+  intervals: CalendarInterval[];
+  crossesDayBoundary: boolean;
+}
+
+/**
+ * Compute the offset in minutes to convert a wall-clock time in `targetTz`
+ * to the equivalent wall-clock time in the system-local timezone.
+ *
+ * Positive result means system-local is ahead of targetTz
+ * (e.g. target=America/New_York, system=UTC → +300 during EST).
+ */
+export function computeTimezoneOffsetMinutes(targetTz: string): number {
+  const now = new Date();
+
+  const localParts = new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric', minute: 'numeric', hourCycle: 'h23',
+  }).formatToParts(now);
+
+  const targetParts = new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric', minute: 'numeric', hourCycle: 'h23', timeZone: targetTz,
+  }).formatToParts(now);
+
+  const extract = (parts: Intl.DateTimeFormatPart[]) => {
+    const h = parseInt(parts.find(p => p.type === 'hour')!.value, 10);
+    const m = parseInt(parts.find(p => p.type === 'minute')!.value, 10);
+    return h * 60 + m;
+  };
+
+  const localMinutes = extract(localParts);
+  const targetMinutes = extract(targetParts);
+
+  let diff = localMinutes - targetMinutes;
+
+  // Normalize to [-720, +720] range to handle day boundary
+  if (diff > 720) diff -= 1440;
+  if (diff < -720) diff += 1440;
+
+  return diff;
+}
+
+/**
+ * Adjust CalendarInterval entries by a timezone offset in minutes.
+ * Returns the adjusted intervals and a flag indicating if any interval
+ * with a Day field required a day-boundary crossing.
+ */
+export function adjustCalendarIntervalsForTimezone(
+  intervals: CalendarInterval[],
+  offsetMinutes: number,
+): AdjustResult {
+  if (offsetMinutes === 0) return { intervals, crossesDayBoundary: false };
+
+  let crossesDayBoundary = false;
+
+  const adjusted = intervals.map(interval => {
+    const result: CalendarInterval = { ...interval };
+
+    // Adjust minutes
+    const currentMinute = result.Minute ?? 0;
+    const totalMinutes = currentMinute + (offsetMinutes % 60);
+    let hourCarry = 0;
+
+    if (totalMinutes >= 60) {
+      result.Minute = totalMinutes - 60;
+      hourCarry = 1;
+    } else if (totalMinutes < 0) {
+      result.Minute = totalMinutes + 60;
+      hourCarry = -1;
+    } else {
+      result.Minute = totalMinutes;
+    }
+
+    // Only set Minute if original had it
+    if (interval.Minute === undefined) delete result.Minute;
+
+    // Adjust hours
+    const hourOffset = Math.trunc(offsetMinutes / 60) + hourCarry;
+    if (result.Hour !== undefined) {
+      const newHour = result.Hour + hourOffset;
+      let dayDelta = 0;
+
+      if (newHour >= 24) {
+        result.Hour = newHour - 24;
+        dayDelta = 1;
+      } else if (newHour < 0) {
+        result.Hour = newHour + 24;
+        dayDelta = -1;
+      } else {
+        result.Hour = newHour;
+      }
+
+      if (dayDelta !== 0) {
+        // Adjust Weekday if present
+        if (result.Weekday !== undefined) {
+          result.Weekday = ((result.Weekday + dayDelta) % 7 + 7) % 7;
+        }
+
+        // Adjust Day if present — this is approximate for day-of-month schedules
+        if (result.Day !== undefined) {
+          crossesDayBoundary = true;
+          const newDay = result.Day + dayDelta;
+          if (newDay < 1) {
+            // Wrap to previous month
+            result.Day = 28;
+            if (result.Month !== undefined) {
+              result.Month = result.Month === 1 ? 12 : result.Month - 1;
+            }
+          } else if (newDay > 28) {
+            // Wrap to next month
+            result.Day = 1;
+            if (result.Month !== undefined) {
+              result.Month = result.Month === 12 ? 1 : result.Month + 1;
+            }
+          } else {
+            result.Day = newDay;
+          }
+        }
+      }
+    }
+
+    return result;
+  });
+
+  return { intervals: adjusted, crossesDayBoundary };
+}
 
 // Maximum number of CalendarInterval entries before falling back to StartInterval
 const MAX_CALENDAR_ENTRIES = 24;
@@ -185,7 +312,24 @@ export function generatePlist(task: DarwinSchedulerTask): string {
     scheduleSection = `  <key>RunAtLoad</key>
   <true/>`;
   } else if (task.cronExpression) {
-    const intervals = cronToCalendarInterval(task.cronExpression);
+    let intervals = cronToCalendarInterval(task.cronExpression);
+
+    if (intervals && task.timezone) {
+      const offsetMinutes = computeTimezoneOffsetMinutes(task.timezone);
+      if (offsetMinutes !== 0) {
+        const { intervals: adjusted, crossesDayBoundary } =
+          adjustCalendarIntervalsForTimezone(intervals, offsetMinutes);
+        intervals = adjusted;
+        if (crossesDayBoundary) {
+          // Day-of-month schedules with cross-day timezone offsets use approximate day (clamped to 1-28).
+          // This is a known limitation of launchd's CalendarInterval which has no timezone support.
+          console.warn(
+            `Task ${task.id}: timezone offset crosses day boundary for day-of-month schedule; ` +
+            `adjusted day is approximate. For exact timing, use system-local timezone.`,
+          );
+        }
+      }
+    }
 
     if (intervals) {
       const intervalXml = intervals.map(renderCalendarInterval).join('\n');
