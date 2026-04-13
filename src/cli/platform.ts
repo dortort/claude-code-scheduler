@@ -63,6 +63,7 @@ async function registerDarwin(task: ScheduledTask, shimPath: string): Promise<vo
     programArgs: ['/bin/bash', shimPath, task.id],
     cronExpression: cronExpr,
     runAtLoad: task.trigger.type === 'once',
+    timezone: task.trigger.timezone !== 'local' ? task.trigger.timezone : undefined,
   };
 
   const plistContent = generatePlist(darwinTask);
