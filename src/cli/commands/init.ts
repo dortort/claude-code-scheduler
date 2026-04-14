@@ -12,6 +12,7 @@
  */
 
 import fs from 'node:fs/promises';
+import { execFile } from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
 
@@ -137,4 +138,22 @@ export async function init(): Promise<InitResult> {
  */
 export async function ensureExecutorInstalled(): Promise<InitResult> {
   return init();
+}
+
+/**
+ * Resolve the absolute path to the `claude` binary using the current PATH.
+ * Returns undefined if `claude` is not found.
+ */
+export async function resolveClaudeBin(): Promise<string | undefined> {
+  const shell = process.env.SHELL?.endsWith('/zsh') ? '/bin/zsh' : '/bin/bash';
+  return new Promise((resolve) => {
+    execFile(shell, ['-lc', 'command -v claude'], { timeout: 5000 }, (err, stdout) => {
+      if (err) {
+        resolve(undefined);
+        return;
+      }
+      const resolved = stdout.trim();
+      resolve(resolved || undefined);
+    });
+  });
 }

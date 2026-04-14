@@ -6,7 +6,7 @@
 import { readdir, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { loadConfig, saveConfig, updateTask, getGlobalSchedulesPath, getLogsDir } from '../../config.js';
-import { getShimPath, ensureExecutorInstalled } from './init.js';
+import { getShimPath, ensureExecutorInstalled, resolveClaudeBin } from './init.js';
 import { unregisterTask } from '../platform.js';
 import type { ScheduledTask } from '../../types.js';
 
@@ -31,7 +31,7 @@ export async function sync(
   options?: { taskId?: string; configPath?: string },
 ): Promise<SyncResult> {
   const configPath = options?.configPath ?? getGlobalSchedulesPath();
-  const config = await loadConfig(configPath);
+  let config = await loadConfig(configPath);
 
   // Ensure executor is installed
   const initResult = await ensureExecutorInstalled();
@@ -42,6 +42,18 @@ export async function sync(
       skipped: [],
       errors: [{ taskId: '*', error: `Failed to install executor: ${initResult.error}` }],
     };
+  }
+
+  // Re-resolve claude binary path on every sync so it stays current
+  // across upgrades, reinstalls, and PATH changes.
+  const claudeBin = await resolveClaudeBin();
+  if (claudeBin && config.settings?.claudeBin !== claudeBin) {
+    const defaults = { defaultTimezone: 'local', logRetentionDays: 30, maxExecutionHistory: 100 };
+    config = {
+      ...config,
+      settings: { ...defaults, ...config.settings, claudeBin },
+    };
+    await saveConfig(configPath, config);
   }
 
   const shimPath = getShimPath();

@@ -143,6 +143,7 @@ const SettingsSchema = z.object({
   defaultTimezone: z.string().default('local'),
   logRetentionDays: z.number().int().positive().default(30),
   maxExecutionHistory: z.number().int().positive().default(100),
+  claudeBin: z.string().optional(),
 });
 
 export const SchedulesConfigSchema = z.object({

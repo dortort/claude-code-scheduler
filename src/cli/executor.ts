@@ -112,6 +112,7 @@ function spawnClaude(
     timeout: number;
     appendSystemPrompt?: string;
     worktreeName?: string;
+    claudeBin?: string;
   },
 ): Promise<SpawnResult> {
   return new Promise((resolve) => {
@@ -131,7 +132,8 @@ function spawnClaude(
     args.push(command);
 
     const childEnv = { ...process.env, ...(options.env ?? {}) };
-    const child = spawn('claude', args, {
+    const claudeBin = options.claudeBin ?? 'claude';
+    const child = spawn(claudeBin, args, {
       cwd: options.cwd,
       env: childEnv,
       stdio: ['ignore', stdoutFd, stderrFd],
@@ -220,6 +222,7 @@ async function buildMemoryContext(
 async function runDirect(
   task: ScheduledTask,
   logsDir: string,
+  claudeBin?: string,
 ): Promise<SpawnResult> {
   const logPaths = getLogPaths(logsDir, task.id, process.platform);
   const stdoutPath = logPaths.stdout ?? logPaths.combined ?? path.join(logsDir, `${task.id}.out.log`);
@@ -236,6 +239,7 @@ async function runDirect(
     stderrPath,
     timeout: task.execution.timeout,
     appendSystemPrompt,
+    claudeBin,
   });
 }
 
@@ -244,6 +248,7 @@ async function runDirect(
 async function runWorktree(
   task: ScheduledTask,
   logsDir: string,
+  claudeBin?: string,
 ): Promise<SpawnResult & { worktreePath?: string; worktreeBranch?: string; pushed?: boolean; sensitiveFilesDetected?: string[] }> {
   const wt = task.execution.worktree!;
   const repoPath = wt.basePath ?? task.execution.workingDirectory;
@@ -270,6 +275,7 @@ async function runWorktree(
       timeout: task.execution.timeout,
       appendSystemPrompt,
       worktreeName,
+      claudeBin,
     });
 
     let pushed = false;
@@ -367,13 +373,14 @@ export async function run(taskId: string): Promise<void> {
       return;
     }
 
+    const claudeBin = config.settings?.claudeBin;
     const isWorktree = task.execution.worktree?.enabled === true;
     let result: SpawnResult & { worktreePath?: string; worktreeBranch?: string; pushed?: boolean };
 
     if (isWorktree) {
-      result = await runWorktree(task, logsDir);
+      result = await runWorktree(task, logsDir, claudeBin);
     } else {
-      result = await runDirect(task, logsDir);
+      result = await runDirect(task, logsDir, claudeBin);
     }
 
     // Write status marker
