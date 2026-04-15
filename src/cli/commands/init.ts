@@ -48,6 +48,9 @@ set -euo pipefail
 # Restore user PATH (launchd provides minimal PATH without node/claude)
 export PATH="{{USER_PATH}}"
 
+# Ensure USER is set (launchd does not provide it; Claude CLI needs it for auth)
+export USER="\${USER:-\$(whoami)}"
+
 EXECUTOR="{{EXECUTOR_PATH}}"
 if [ ! -f "$EXECUTOR" ]; then
   echo "Executor not found at $EXECUTOR. Run /scheduler:add to reinstall." >&2
