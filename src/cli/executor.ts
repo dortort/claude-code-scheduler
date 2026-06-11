@@ -182,6 +182,57 @@ function spawnClaude(
   });
 }
 
+// Retry claude on transient auth failures. The OAuth token in the macOS
+// keychain is shared across every claude session and is refreshed/rotated by
+// the server; a headless scheduled run can occasionally read a token that a
+// sibling interactive session has already rotated, which surfaces as
+// "401 Invalid authentication credentials" a few seconds in. A fresh claude
+// invocation re-reads the keychain and performs its own refresh, so a short
+// retry almost always recovers — no dedicated credential required.
+const AUTH_FAILURE_RE = /invalid authentication credentials|API Error:\s*401|Failed to authenticate/i;
+const AUTH_RETRY_MAX_ATTEMPTS = 2; // 1 initial attempt + 1 retry
+const AUTH_RETRY_DELAY_MS = 8000;
+
+async function isAuthFailure(stdoutPath: string): Promise<boolean> {
+  try {
+    return AUTH_FAILURE_RE.test(await readLog(stdoutPath, 50));
+  } catch {
+    return false;
+  }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function spawnClaudeWithAuthRetry(
+  command: string,
+  options: Parameters<typeof spawnClaude>[1],
+  maxAttempts = AUTH_RETRY_MAX_ATTEMPTS,
+  delayMs = AUTH_RETRY_DELAY_MS,
+): Promise<SpawnResult> {
+  let result = await spawnClaude(command, options);
+  for (
+    let attempt = 1;
+    attempt < maxAttempts &&
+      !result.timedOut &&
+      result.exitCode !== 0 &&
+      result.exitCode !== 143 && // SIGTERM — do not retry a cancelled run
+      process.exitCode !== 143 &&
+      (await isAuthFailure(options.stdoutPath));
+    attempt++
+  ) {
+    console.error(
+      `[scheduler] auth failure (exit ${result.exitCode}); retrying in ${delayMs}ms ` +
+        `(attempt ${attempt + 1}/${maxAttempts})`,
+    );
+    await delay(delayMs);
+    if (process.exitCode === 143) break; // cancelled during the backoff
+    result = await spawnClaude(command, options);
+  }
+  return result;
+}
+
 // --- Status Markers ---
 
 async function writeStatus(logsDir: string, taskId: string, status: string): Promise<void> {
@@ -231,7 +282,7 @@ async function runDirect(
   // Read previous output BEFORE createWriteStream truncates the file
   const appendSystemPrompt = await buildMemoryContext(task, stdoutPath);
 
-  return spawnClaude(task.execution.command, {
+  return spawnClaudeWithAuthRetry(task.execution.command, {
     cwd: task.execution.workingDirectory,
     skipPermissions: task.execution.skipPermissions,
     env: task.execution.env,
@@ -266,7 +317,7 @@ async function runWorktree(
     // Read previous output BEFORE createWriteStream truncates the file
     const appendSystemPrompt = await buildMemoryContext(task, stdoutPath);
 
-    const result = await spawnClaude(task.execution.command, {
+    const result = await spawnClaudeWithAuthRetry(task.execution.command, {
       cwd: repoPath,
       skipPermissions: task.execution.skipPermissions,
       env: task.execution.env,
