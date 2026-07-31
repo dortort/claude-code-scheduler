@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "vitest run --config vitest.config.e2e.ts",
+    "test:e2e": "pnpm -C e2e install && pnpm -C e2e test",
     "test:coverage": "vitest run --coverage",
     "lint": "eslint src/",
     "prepublishOnly": "npm run build"
