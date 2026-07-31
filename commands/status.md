@@ -53,9 +53,11 @@ Issue ALL of the following reads/commands simultaneously in one batch:
 
 Merge global + project tasks (project tasks override global tasks with the same `id`).
 
-### Step 3 — Empty state (no tasks)
+### Step 3 — Empty state (no configured tasks)
 
-If the merged task list is empty or both config files are missing, output:
+If the merged task list is empty (or both config files are missing), the block
+below is the PRIMARY output and MUST always be shown — even when orphaned OS
+registrations exist. Never replace it with an issues-only report.
 
 ```
 Scheduler Status
@@ -69,7 +71,9 @@ No tasks are currently scheduled.
 Run /scheduler:add to create your first task.
 ```
 
-Then stop — do not attempt further per-task checks.
+You MAY append a brief "Orphaned registrations" note afterward if plist or
+launchctl entries exist with no matching config, but the `Tasks: none configured`
+line must appear first. Do not perform per-task status checks.
 
 ### Step 4 — Per-task status table
 

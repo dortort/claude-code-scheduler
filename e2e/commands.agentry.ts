@@ -18,7 +18,16 @@ test.describe('E2E Scheduler Commands', () => {
   test.describe('Empty State', () => {
     test('/scheduler:status — reports no tasks', async ({ agent, workspace }) => {
       const out = agentText(await agent.run('/scheduler:status', runOpts(workspace)));
-      assertContainsAny(out, ['none configured', 'no tasks', '0 tasks', 'no scheduled']);
+      // "no corresponding config" covers the case where the machine has orphaned
+      // OS registrations but the (isolated) config is empty.
+      assertContainsAny(out, [
+        'none configured',
+        'no tasks',
+        '0 tasks',
+        'no scheduled',
+        'no configured tasks',
+        'no corresponding config',
+      ]);
       assertContainsAny(out, ['macos', 'darwin', 'launchd', 'mac']);
     });
 
