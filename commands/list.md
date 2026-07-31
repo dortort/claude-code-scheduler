@@ -2,6 +2,8 @@
 allowed-tools:
   - Read
   - Glob
+  - Bash(cat *)
+  - Bash(tail *)
   - Bash(~/.claude/bin/claude-scheduler-cli *)
 ---
 
@@ -11,13 +13,15 @@ List all scheduled tasks with their status, schedule, and next run time.
 
 ## Data Sources
 
-All data comes from these exact paths — do NOT read any source files:
+All data comes from these exact paths — do NOT read any source files. The state
+directory is `$CLAUDE_SCHEDULER_STATE_DIR` when set, otherwise `~/.claude`; in
+Bash always read it as `"${CLAUDE_SCHEDULER_STATE_DIR:-$HOME/.claude}"`.
 
 | Data | Path |
 |------|------|
-| Global config | `~/.claude/schedules.json` |
+| Global config | `${CLAUDE_SCHEDULER_STATE_DIR:-~/.claude}/schedules.json` |
 | Project config | `.claude/schedules.json` (optional) |
-| Execution history | `~/.claude/execution-history.jsonl` |
+| Execution history | `${CLAUDE_SCHEDULER_STATE_DIR:-~/.claude}/execution-history.jsonl` |
 
 Config format:
 ```json
@@ -31,9 +35,9 @@ History format: one JSON object per line — fields: `taskId`, `taskName`, `stat
 ### Step 1 — Load all data in parallel
 
 Issue simultaneously:
-1. `Read ~/.claude/schedules.json`
-2. `Read .claude/schedules.json` (ignore if missing)
-3. `Bash: tail -50 ~/.claude/execution-history.jsonl 2>/dev/null || echo NO_HISTORY`
+1. `Bash: cat "${CLAUDE_SCHEDULER_STATE_DIR:-$HOME/.claude}/schedules.json" 2>/dev/null || echo NO_GLOBAL_CONFIG`
+2. `Bash: cat .claude/schedules.json 2>/dev/null || echo NO_PROJECT_CONFIG` (ignore if missing)
+3. `Bash: tail -50 "${CLAUDE_SCHEDULER_STATE_DIR:-$HOME/.claude}/execution-history.jsonl" 2>/dev/null || echo NO_HISTORY`
 
 ### Step 2 — Derive merged task list
 
@@ -52,11 +56,14 @@ Then stop.
 
 ### Step 4 — Humanize cron expressions and compute next runs
 
-Use a single `node -e` call with the compiled modules (never `src/`):
+Use a single call to the compiled CLI (never `src/`):
 
 ```bash
 ~/.claude/bin/claude-scheduler-cli humanize --tasks '[{"id":"...","cron":"...","timezone":"..."}]'
 ```
+
+If that binary is not present, fall back to showing each task's raw cron
+expression (e.g. `0 9 * * *`) and omit the next-run time.
 
 ### Step 5 — Output table
 
