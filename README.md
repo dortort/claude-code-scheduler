@@ -117,7 +117,7 @@ Global config takes precedence on ID collision. Project configs cannot set `skip
 ```bash
 npm install
 npm test            # Unit/integration tests
-npm run test:e2e    # E2E tests via Claude CLI subprocess (~9 min)
+npm run test:e2e    # Agentry E2E (local-only; needs claude CLI + sibling ../agentry)
 npm run lint        # ESLint with typescript-eslint
 npm run typecheck   # Type checking only
 npm run build       # TypeScript compilation
@@ -131,7 +131,7 @@ CI runs automatically on every push and PR to `main` (lint, typecheck, test on N
 The test suite has two tiers:
 
 - **Unit/Integration** (`npm test`) — fast tests covering library functions with no external dependencies.
-- **E2E** (`npm run test:e2e`) — subprocess tests that invoke each plugin command through `claude --plugin-dir`. Requires the `claude` CLI to be installed and takes ~9 minutes. Skipped automatically if the CLI is not available. E2E tests use temp directories with fixture data and assert on output patterns (not exact strings) to handle Claude's non-deterministic phrasing.
+- **E2E** (`npm run test:e2e`) — [agentry](https://github.com/dortort/agentry)-based tests that drive each plugin command through a real Claude agent (the plugin is loaded via `--plugin-dir`) and assert on output patterns (not exact strings) to handle Claude's non-deterministic phrasing. **Local-only** — not run in CI. Requires the `claude` CLI, `pnpm`, and a sibling `../agentry` checkout (build it once with `pnpm -r build`). The harness lives in [`e2e/`](e2e/README.md) as a self-contained pnpm project so it never touches the npm-managed root. Note: the scheduler reads global `~/.claude` and `~/Library/LaunchAgents` state, so the empty/populated scenarios assume a machine without pre-existing scheduled tasks.
 
 ### Releasing
 

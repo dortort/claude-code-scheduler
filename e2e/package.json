@@ -1,0 +1,20 @@
+{
+  "name": "scheduler-e2e",
+  "private": true,
+  "type": "module",
+  "description": "Agentry-based end-to-end tests for @dortort/scheduler (local-only; consumes ../../agentry).",
+  "scripts": {
+    "test": "tsx node_modules/agentry/src/bin.ts test"
+  },
+  "devDependencies": {
+    "agentry": "file:../../agentry/packages/cli",
+    "tsx": "^4.19.2"
+  },
+  "pnpm": {
+    "overrides": {
+      "@agentry/core": "file:../../agentry/packages/core",
+      "@agentry/claude": "file:../../agentry/packages/claude",
+      "@agentry/mcp": "file:../../agentry/packages/mcp"
+    }
+  }
+}
