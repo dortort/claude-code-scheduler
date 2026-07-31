@@ -110,6 +110,10 @@ Tasks are stored in JSON config files:
 
 Global config takes precedence on ID collision. Project configs cannot set `skipPermissions`.
 
+The global state directory (schedules, logs, history — default `~/.claude`) can be
+relocated by setting `CLAUDE_SCHEDULER_STATE_DIR`; OS registration (launchd/cron)
+always uses the real home. This is primarily used to isolate state in tests.
+
 ---
 
 ## Development
@@ -131,7 +135,7 @@ CI runs automatically on every push and PR to `main` (lint, typecheck, test on N
 The test suite has two tiers:
 
 - **Unit/Integration** (`npm test`) — fast tests covering library functions with no external dependencies.
-- **E2E** (`npm run test:e2e`) — [agentry](https://github.com/dortort/agentry)-based tests that drive each plugin command through a real Claude agent (the plugin is loaded via `--plugin-dir`) and assert on output patterns (not exact strings) to handle Claude's non-deterministic phrasing. **Local-only** — not run in CI. Requires the `claude` CLI, `pnpm`, and a sibling `../agentry` checkout (build it once with `pnpm -r build`). The harness lives in [`e2e/`](e2e/README.md) as a self-contained pnpm project so it never touches the npm-managed root. Note: the scheduler reads global `~/.claude` and `~/Library/LaunchAgents` state, so the empty/populated scenarios assume a machine without pre-existing scheduled tasks.
+- **E2E** (`npm run test:e2e`) — [agentry](https://github.com/dortort/agentry)-based tests that drive each read command through a real Claude agent (the plugin is loaded via `--plugin-dir`) and assert on output patterns (not exact strings) to handle Claude's non-deterministic phrasing. **Local-only** — not run in CI. Requires the `claude` CLI, `pnpm`, and a sibling `../agentry` checkout (build it once with `pnpm -r build`). The harness lives in [`e2e/`](e2e/README.md) as a self-contained pnpm project so it never touches the npm-managed root. Scenarios are made deterministic by pointing `CLAUDE_SCHEDULER_STATE_DIR` at a per-scenario sandbox (auth-safe — `$HOME` is untouched); mutating commands are excluded since their OS registration can't be isolated.
 
 ### Releasing
 

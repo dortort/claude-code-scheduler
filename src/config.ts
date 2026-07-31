@@ -17,8 +17,17 @@ import { isSafeIdentifier } from './utils/shell.js';
 
 // --- Path Resolution ---
 
+/**
+ * The scheduler's state directory (schedules, logs, history). Defaults to
+ * `~/.claude`; override with `CLAUDE_SCHEDULER_STATE_DIR`. Isolating this lets
+ * tests exercise the commands without touching real global state.
+ */
+export function getStateDir(): string {
+  return process.env.CLAUDE_SCHEDULER_STATE_DIR ?? path.join(os.homedir(), '.claude');
+}
+
 export function getGlobalSchedulesPath(): string {
-  return path.join(os.homedir(), '.claude', 'schedules.json');
+  return path.join(getStateDir(), 'schedules.json');
 }
 
 export function getProjectSchedulesPath(projectPath: string): string {
@@ -26,11 +35,11 @@ export function getProjectSchedulesPath(projectPath: string): string {
 }
 
 export function getLogsDir(): string {
-  return path.join(os.homedir(), '.claude', 'logs');
+  return path.join(getStateDir(), 'logs');
 }
 
 export function getHistoryPath(): string {
-  return path.join(os.homedir(), '.claude', 'execution-history.jsonl');
+  return path.join(getStateDir(), 'execution-history.jsonl');
 }
 
 /**

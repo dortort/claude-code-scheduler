@@ -1,6 +1,6 @@
 ---
 allowed-tools:
-  - Bash(cat ~/.claude/execution-history.jsonl *)
+  - Bash(cat *)
   - Bash(tail *)
 ---
 
@@ -10,9 +10,12 @@ View execution history for scheduled tasks.
 
 ## Data Sources
 
+The state directory is `$CLAUDE_SCHEDULER_STATE_DIR` when set, otherwise
+`~/.claude`; in Bash read it as `"${CLAUDE_SCHEDULER_STATE_DIR:-$HOME/.claude}"`.
+
 | Data | Path |
 |------|------|
-| Execution history | `~/.claude/execution-history.jsonl` |
+| Execution history | `${CLAUDE_SCHEDULER_STATE_DIR:-~/.claude}/execution-history.jsonl` |
 
 History record format (one JSON object per line):
 ```json
@@ -26,7 +29,7 @@ Fields: `taskId`, `taskName`, `status` (`success`|`failure`|`timeout`), `started
 ### Step 1 — Read history
 
 ```bash
-cat ~/.claude/execution-history.jsonl 2>/dev/null || echo NO_HISTORY
+cat "${CLAUDE_SCHEDULER_STATE_DIR:-$HOME/.claude}/execution-history.jsonl" 2>/dev/null || echo NO_HISTORY
 ```
 
 ### Step 2 — Empty state

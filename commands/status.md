@@ -2,6 +2,8 @@
 allowed-tools:
   - Read
   - Glob
+  - Bash(cat *)
+  - Bash(tail *)
   - Bash(launchctl list *)
   - Bash(crontab -l)
   - Bash(ls ~/Library/LaunchAgents/com.claude-scheduler.*.plist *)
@@ -14,14 +16,16 @@ Show the health status of the scheduling system and individual tasks.
 
 ## Data Sources
 
-All checks use these exact paths — do NOT read any source files:
+All checks use these exact paths — do NOT read any source files. The state
+directory is `$CLAUDE_SCHEDULER_STATE_DIR` when set, otherwise `~/.claude`; in
+Bash always read it as `"${CLAUDE_SCHEDULER_STATE_DIR:-$HOME/.claude}"`.
 
 | Data | Path |
 |------|------|
-| Global config | `~/.claude/schedules.json` |
+| Global config | `${CLAUDE_SCHEDULER_STATE_DIR:-~/.claude}/schedules.json` |
 | Project config | `.claude/schedules.json` (optional, only if present) |
-| Execution history | `~/.claude/execution-history.jsonl` |
-| macOS plist files | `~/Library/LaunchAgents/com.claude-scheduler.*.plist` |
+| Execution history | `${CLAUDE_SCHEDULER_STATE_DIR:-~/.claude}/execution-history.jsonl` |
+| macOS plist files | `~/Library/LaunchAgents/com.claude-scheduler.*.plist` (OS-managed; always real home) |
 
 Config format (`schedules.json`):
 ```json
@@ -38,9 +42,9 @@ macOS plist label format: `com.claude-scheduler.<taskId>`
 
 Issue ALL of the following reads/commands simultaneously in one batch:
 
-1. `Read ~/.claude/schedules.json` (global config)
-2. `Read .claude/schedules.json` (project config — ignore if missing)
-3. `Bash: tail -20 ~/.claude/execution-history.jsonl 2>/dev/null || echo NO_HISTORY`
+1. `Bash: cat "${CLAUDE_SCHEDULER_STATE_DIR:-$HOME/.claude}/schedules.json" 2>/dev/null || echo NO_GLOBAL_CONFIG` (global config)
+2. `Bash: cat .claude/schedules.json 2>/dev/null || echo NO_PROJECT_CONFIG` (project config — ignore if missing)
+3. `Bash: tail -20 "${CLAUDE_SCHEDULER_STATE_DIR:-$HOME/.claude}/execution-history.jsonl" 2>/dev/null || echo NO_HISTORY`
 4. `Bash: ls ~/Library/LaunchAgents/com.claude-scheduler.*.plist 2>/dev/null || echo NO_PLISTS` (macOS)
    OR `Bash: crontab -l 2>/dev/null | grep '#claude-scheduler' || echo NO_ENTRIES` (Linux — check with `uname -s` first if platform is unknown)
 5. `Bash: launchctl list 2>/dev/null | grep com.claude-scheduler || echo NO_ENTRIES` (macOS only)

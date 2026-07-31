@@ -11,14 +11,17 @@ View stdout and stderr logs for a scheduled task.
 
 ## Data Sources
 
+The state directory is `$CLAUDE_SCHEDULER_STATE_DIR` when set, otherwise
+`~/.claude`; in Bash read it as `"${CLAUDE_SCHEDULER_STATE_DIR:-$HOME/.claude}"`.
+
 | Data | Path pattern |
 |------|--------------|
-| Global config | `~/.claude/schedules.json` |
+| Global config | `${CLAUDE_SCHEDULER_STATE_DIR:-~/.claude}/schedules.json` |
 | Project config | `.claude/schedules.json` (optional) |
-| stdout log (macOS) | `~/.claude/logs/<taskId>.out.log` |
-| stderr log (macOS) | `~/.claude/logs/<taskId>.err.log` |
-| combined log (Linux) | `~/.claude/logs/<taskId>.log` |
-| status marker | `~/.claude/logs/<taskId>.status` |
+| stdout log (macOS) | `${CLAUDE_SCHEDULER_STATE_DIR:-~/.claude}/logs/<taskId>.out.log` |
+| stderr log (macOS) | `${CLAUDE_SCHEDULER_STATE_DIR:-~/.claude}/logs/<taskId>.err.log` |
+| combined log (Linux) | `${CLAUDE_SCHEDULER_STATE_DIR:-~/.claude}/logs/<taskId>.log` |
+| status marker | `${CLAUDE_SCHEDULER_STATE_DIR:-~/.claude}/logs/<taskId>.status` |
 
 Config format:
 ```json
@@ -31,7 +34,10 @@ Status marker content examples: `success`, `failure:exit-1`, `failure:timeout`
 
 ### Step 1 — Find the task
 
-Read `~/.claude/schedules.json` (and `.claude/schedules.json` if present) directly as JSON — no `node -e` needed.
+Read the config as JSON — no `node -e` needed:
+- `Bash: cat "${CLAUDE_SCHEDULER_STATE_DIR:-$HOME/.claude}/schedules.json" 2>/dev/null || echo NO_GLOBAL_CONFIG`
+- `Bash: cat .claude/schedules.json 2>/dev/null || echo NO_PROJECT_CONFIG` (if present)
+
 Match the user's input against task `id` (exact) or `name` (case-insensitive).
 
 If not found: `Task "<input>" not found. Run /scheduler:list to see available tasks.`
@@ -41,12 +47,12 @@ If not found: `Task "<input>" not found. Run /scheduler:list to see available ta
 With the resolved `<taskId>`, issue all reads simultaneously:
 
 **macOS:**
-1. `Bash: tail -50 ~/.claude/logs/<taskId>.out.log 2>/dev/null || echo NO_STDOUT`
-2. `Bash: tail -50 ~/.claude/logs/<taskId>.err.log 2>/dev/null || echo NO_STDERR`
-3. `Bash: cat ~/.claude/logs/<taskId>.status 2>/dev/null || echo NO_STATUS`
+1. `Bash: tail -50 "${CLAUDE_SCHEDULER_STATE_DIR:-$HOME/.claude}/logs/<taskId>.out.log" 2>/dev/null || echo NO_STDOUT`
+2. `Bash: tail -50 "${CLAUDE_SCHEDULER_STATE_DIR:-$HOME/.claude}/logs/<taskId>.err.log" 2>/dev/null || echo NO_STDERR`
+3. `Bash: cat "${CLAUDE_SCHEDULER_STATE_DIR:-$HOME/.claude}/logs/<taskId>.status" 2>/dev/null || echo NO_STATUS`
 
 **Linux:** replace steps 1+2 with:
-1. `Bash: tail -50 ~/.claude/logs/<taskId>.log 2>/dev/null || echo NO_LOG`
+1. `Bash: tail -50 "${CLAUDE_SCHEDULER_STATE_DIR:-$HOME/.claude}/logs/<taskId>.log" 2>/dev/null || echo NO_LOG`
 
 If the user requests "full" or "all", use `cat` instead of `tail -50`.
 
