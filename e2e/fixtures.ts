@@ -1,12 +1,14 @@
 import type { Sandbox } from 'agentry';
+import { STATE_SUBDIR } from './helpers.js';
 
 /**
- * Seed a sandbox with the sample scheduler data used by the "populated" scenarios:
- * one task (`e2e-daily-review`), a two-record execution history, and its log files.
- * Mirrors the pre-agentry temp-project fixture, written into the sandbox instead.
+ * Seed a sandbox's isolated state dir (CLAUDE_SCHEDULER_STATE_DIR) with the
+ * sample data the "populated" scenarios expect: one task (`e2e-daily-review`),
+ * a two-record execution history, and its log files.
  */
 export async function seedPopulated(workspace: Sandbox): Promise<void> {
   const dir = workspace.dir;
+  const p = (rel: string) => `${STATE_SUBDIR}/${rel}`;
 
   const schedulesConfig = {
     version: 1,
@@ -28,7 +30,7 @@ export async function seedPopulated(workspace: Sandbox): Promise<void> {
       },
     ],
   };
-  await workspace.write('.claude/schedules.json', JSON.stringify(schedulesConfig, null, 2));
+  await workspace.write(p('schedules.json'), JSON.stringify(schedulesConfig, null, 2));
 
   const successRecord = {
     id: 'exec-001',
@@ -56,17 +58,17 @@ export async function seedPopulated(workspace: Sandbox): Promise<void> {
     error: 'Command exited with code 1',
   };
   await workspace.write(
-    '.claude/execution-history.jsonl',
+    p('execution-history.jsonl'),
     `${JSON.stringify(successRecord)}\n${JSON.stringify(failureRecord)}\n`,
   );
 
   await workspace.write(
-    '.claude/logs/e2e-daily-review.out.log',
+    p('logs/e2e-daily-review.out.log'),
     'Reviewing recent commits for project\nFound 3 commits in the last 24 hours\nReview complete\n',
   );
   await workspace.write(
-    '.claude/logs/e2e-daily-review.err.log',
+    p('logs/e2e-daily-review.err.log'),
     'Warning: large diff detected in commit abc123\n',
   );
-  await workspace.write('.claude/logs/e2e-daily-review.status', 'success');
+  await workspace.write(p('logs/e2e-daily-review.status'), 'success');
 }
