@@ -1,11 +1,29 @@
 import path from 'node:path';
-import type { RunRecord } from 'agentry';
+import type { AgentRunExtra, RunRecord, Sandbox } from 'agentry';
 
 /** Repo root, used as the Claude Code `--plugin-dir` so the scheduler plugin loads. */
 export const SCHEDULER_ROOT = path.resolve(import.meta.dirname, '..');
 
-/** Shared run options: load the scheduler plugin and skip interactive approvals. */
-export const RUN_OPTS = { pluginDir: SCHEDULER_ROOT, permissionMode: 'bypassPermissions' } as const;
+/** Sandbox-relative subdir used as the scheduler's isolated global state directory. */
+export const STATE_SUBDIR = 'state';
+
+/** Absolute state dir for a scenario's sandbox (what CLAUDE_SCHEDULER_STATE_DIR points at). */
+export function stateDir(workspace: Sandbox): string {
+  return path.join(workspace.dir, STATE_SUBDIR);
+}
+
+/**
+ * Run options for a scenario: load the scheduler plugin, skip interactive
+ * approvals, and redirect the scheduler's global state to the sandbox so the
+ * command reads/writes are isolated from the real `~/.claude`.
+ */
+export function runOpts(workspace: Sandbox): AgentRunExtra {
+  return {
+    pluginDir: SCHEDULER_ROOT,
+    permissionMode: 'bypassPermissions',
+    env: { CLAUDE_SCHEDULER_STATE_DIR: stateDir(workspace) },
+  };
+}
 
 /** All assistant text from a run, joined — the analog of the old stdout+stderr capture. */
 export function agentText(rec: RunRecord): string {
