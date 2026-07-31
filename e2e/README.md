@@ -38,7 +38,10 @@ pnpm exec tsx node_modules/agentry/src/bin.ts test --grep "not found"  # one sce
 ```
 
 `agentry.config.ts` runs in `live` mode (real agent, ~$0.04/scenario). No cassettes
-are recorded or committed.
+are recorded or committed. Because a real model varies its phrasing and path run to
+run, assertions on free text are inherently a little flaky; `retries: 2` is set so a
+flaky scenario re-runs before failing (state isolation, below, is deterministic — only
+the model's wording is not).
 
 ## How it works
 
