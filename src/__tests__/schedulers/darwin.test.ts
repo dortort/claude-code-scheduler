@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   generatePlist,
   cronToCalendarInterval,
@@ -196,6 +196,22 @@ describe('computeTimezoneOffsetMinutes', () => {
     const tokyoAheadOfNY = toNY - toTokyo;
     expect(tokyoAheadOfNY).toBeGreaterThanOrEqual(13 * 60);
     expect(tokyoAheadOfNY).toBeLessThanOrEqual(14 * 60);
+  });
+
+  it('stays correct when the instant straddles a month boundary (regression)', () => {
+    // At 2026-07-31T23:30Z it is still Jul 31 in UTC/NY but already Aug 1 in Tokyo,
+    // so a day-of-month-only calc jumps 31 -> 1 and injects a ~30-day error.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-31T23:30:00Z'));
+    try {
+      const toTokyo = computeTimezoneOffsetMinutes('Asia/Tokyo');
+      const toNY = computeTimezoneOffsetMinutes('America/New_York');
+      const tokyoAheadOfNY = toNY - toTokyo;
+      expect(tokyoAheadOfNY).toBeGreaterThanOrEqual(13 * 60);
+      expect(tokyoAheadOfNY).toBeLessThanOrEqual(14 * 60);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
