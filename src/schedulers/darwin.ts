@@ -46,15 +46,17 @@ export function computeTimezoneOffsetMinutes(targetTz: string): number {
     ...(tz ? { timeZone: tz } : {}),
   });
 
-  const toMinutesSinceEpochDay = (parts: Intl.DateTimeFormatPart[]) => {
-    const day = parseInt(parts.find(p => p.type === 'day')!.value, 10);
-    const h = parseInt(parts.find(p => p.type === 'hour')!.value, 10);
-    const m = parseInt(parts.find(p => p.type === 'minute')!.value, 10);
-    return day * 1440 + h * 60 + m;
+  const toWallMinutes = (parts: Intl.DateTimeFormatPart[]) => {
+    const get = (type: string) => parseInt(parts.find(p => p.type === type)!.value, 10);
+    // Use the full year/month/day so the subtraction stays correct across month
+    // and year boundaries (day-of-month alone jumps e.g. 31 -> 1, a ~30-day error).
+    return Math.round(
+      Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute')) / 60000,
+    );
   };
 
-  const localMinutes = toMinutesSinceEpochDay(fmt().formatToParts(now));
-  const targetMinutes = toMinutesSinceEpochDay(fmt(targetTz).formatToParts(now));
+  const localMinutes = toWallMinutes(fmt().formatToParts(now));
+  const targetMinutes = toWallMinutes(fmt(targetTz).formatToParts(now));
 
   return localMinutes - targetMinutes;
 }
