@@ -15,6 +15,7 @@ import fs from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
+import { writeFileAtomic } from '../../utils/atomic.js';
 
 export interface InitResult {
   success: boolean;
@@ -113,13 +114,13 @@ export async function init(): Promise<InitResult> {
       .replace('{{EXECUTOR_PATH}}', executorPath)
       .replace('{{NODE_PATH}}', nodePath)
       .replace('{{USER_PATH}}', userPath);
-    await fs.writeFile(shimDest, shimContent, { mode: 0o755 });
+    await writeFileAtomic(shimDest, shimContent, { mode: 0o755 });
 
     // Write CLI shim (no PATH restore needed — runs interactively)
     const cliShimContent = CLI_SHIM_TEMPLATE
       .replace('{{CLI_ENTRY_PATH}}', cliEntryPath)
       .replace('{{NODE_PATH}}', nodePath);
-    await fs.writeFile(cliShimDest, cliShimContent, { mode: 0o755 });
+    await writeFileAtomic(cliShimDest, cliShimContent, { mode: 0o755 });
 
     return { success: true, executorPath, shimPath: shimDest, cliShimPath: cliShimDest };
   } catch (err) {
