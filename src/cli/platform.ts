@@ -7,6 +7,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { exec as defaultExec } from '../utils/exec.js';
+import { writeFileAtomic } from '../utils/atomic.js';
 import { getLogsDir } from '../config.js';
 import {
   generatePlist,
@@ -78,7 +79,7 @@ async function registerDarwin(task: ScheduledTask, shimPath: string): Promise<vo
     await defaultExec('launchctl', ['unload', plistPath]);
   } catch { /* not loaded */ }
 
-  await fs.writeFile(plistPath, plistContent, 'utf-8');
+  await writeFileAtomic(plistPath, plistContent);
   await defaultExec('launchctl', ['load', plistPath]);
 
   // Ensure daily auto-sync job exists when registering timezone-aware tasks
@@ -145,7 +146,7 @@ async function ensureTzSyncJob(): Promise<void> {
     await defaultExec('launchctl', ['unload', plistPath]);
   } catch { /* not loaded */ }
 
-  await fs.writeFile(plistPath, plist, 'utf-8');
+  await writeFileAtomic(plistPath, plist);
   await defaultExec('launchctl', ['load', plistPath]);
 }
 
