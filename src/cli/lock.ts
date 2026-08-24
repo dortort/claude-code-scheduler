@@ -56,6 +56,27 @@ async function verifyProcessIdentity(pid: number, taskId: string): Promise<boole
   }
 }
 
+/**
+ * Report whether a live, identity-verified executor currently holds this
+ * task's lock. Used by sync to avoid unloading/reloading a task's OS
+ * registration while its job is mid-run — which would tear down the running
+ * claude process. A dead or unverifiable lock reports false so a stale lock
+ * never blocks re-registration indefinitely.
+ */
+export async function isTaskRunning(taskId: string): Promise<boolean> {
+  const pid = await readLockPid(taskId);
+  if (pid === null) return false;
+
+  if (!(await verifyProcessIdentity(pid, taskId))) return false;
+
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function killRunningTask(taskId: string): Promise<boolean> {
   const lockPath = getLockPath(taskId);
   const pid = await readLockPid(taskId);
