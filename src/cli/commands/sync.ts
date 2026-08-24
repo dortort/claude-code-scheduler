@@ -8,6 +8,7 @@ import path from 'node:path';
 import { loadConfig, saveConfig, updateTask, getGlobalSchedulesPath, getLogsDir } from '../../config.js';
 import { getShimPath, ensureExecutorInstalled, resolveClaudeBin } from './init.js';
 import { unregisterTask } from '../platform.js';
+import { isTaskRunning as defaultIsTaskRunning } from '../lock.js';
 import type { ScheduledTask } from '../../types.js';
 
 export interface SyncResult {
@@ -28,9 +29,14 @@ export interface OSRegistration {
  */
 export async function sync(
   register: (task: ScheduledTask, shimPath: string) => Promise<void>,
-  options?: { taskId?: string; configPath?: string },
+  options?: {
+    taskId?: string;
+    configPath?: string;
+    isTaskRunning?: (taskId: string) => Promise<boolean>;
+  },
 ): Promise<SyncResult> {
   const configPath = options?.configPath ?? getGlobalSchedulesPath();
+  const isTaskRunning = options?.isTaskRunning ?? defaultIsTaskRunning;
   let config = await loadConfig(configPath);
 
   // Ensure executor is installed
@@ -67,6 +73,14 @@ export async function sync(
 
   for (const task of tasks) {
     if (!task.enabled) {
+      skipped.push(task.id);
+      continue;
+    }
+
+    // Skip tasks whose job is mid-run: re-registering unloads/reloads the
+    // launchd service and would tear down the running claude process. The
+    // next sync re-registers it once the run finishes.
+    if (await isTaskRunning(task.id)) {
       skipped.push(task.id);
       continue;
     }
