@@ -12,13 +12,17 @@ export interface WriteFileAtomicOptions {
   mode?: number;
 }
 
+// Distinguishes concurrent writes to the same target from within one process,
+// so their temp files never collide.
+let writeCounter = 0;
+
 export async function writeFileAtomic(
   filePath: string,
   content: string,
   options?: WriteFileAtomicOptions,
 ): Promise<void> {
   const dir = path.dirname(filePath);
-  const tmpPath = path.join(dir, `.${path.basename(filePath)}.tmp-${process.pid}`);
+  const tmpPath = path.join(dir, `.${path.basename(filePath)}.tmp-${process.pid}-${writeCounter++}`);
 
   const writeOptions = options?.mode !== undefined ? { mode: options.mode } : undefined;
 

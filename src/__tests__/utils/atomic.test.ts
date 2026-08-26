@@ -42,6 +42,16 @@ describe('writeFileAtomic', () => {
     expect(leftovers).toEqual([]);
   });
 
+  it('handles concurrent writes to the same target without colliding', async () => {
+    const target = path.join(tmpDir, 'concurrent.txt');
+    await Promise.all(
+      Array.from({ length: 10 }, () => writeFileAtomic(target, 'same')),
+    );
+    expect(await readFile(target, 'utf-8')).toBe('same');
+    const leftovers = (await readdir(tmpDir)).filter(f => f.includes('.tmp-'));
+    expect(leftovers).toEqual([]);
+  });
+
   it('cleans up the temp file and rejects when the target dir is missing', async () => {
     const target = path.join(tmpDir, 'missing-subdir', 'file.txt');
     await expect(writeFileAtomic(target, 'data')).rejects.toThrow();
