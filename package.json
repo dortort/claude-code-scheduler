@@ -13,6 +13,8 @@
     "test:e2e": "pnpm -C e2e install && pnpm -C e2e test",
     "test:coverage": "vitest run --coverage",
     "lint": "eslint src/",
+    "sync-version": "node scripts/sync-plugin-version.mjs",
+    "version": "npm run sync-version && git add .claude-plugin/plugin.json",
     "prepublishOnly": "npm run build"
   },
   "files": [

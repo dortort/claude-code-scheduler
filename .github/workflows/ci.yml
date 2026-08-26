@@ -10,6 +10,16 @@ permissions:
   contents: read
 
 jobs:
+  version-sync:
+    name: Version sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/sync-plugin-version.mjs --check
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
