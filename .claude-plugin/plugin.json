@@ -1,6 +1,6 @@
 {
   "name": "scheduler",
-  "version": "0.1.0",
+  "version": "0.4.0",
   "description": "Schedule recurring and one-time AI-assisted tasks using native OS schedulers",
   "author": {
     "name": "dortort"
