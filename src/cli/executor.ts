@@ -10,7 +10,7 @@
  */
 
 import { spawn } from 'node:child_process';
-import { openSync, closeSync } from 'node:fs';
+import { openSync, closeSync, writeSync } from 'node:fs';
 import { mkdir, rm, readFile, writeFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -163,21 +163,26 @@ function spawnClaude(
     };
     process.on('SIGTERM', onSigterm);
 
+    // A spawn failure emits both 'error' and 'close'; settle only once.
+    let settled = false;
+    const settle = (result: SpawnResult) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      process.removeListener('SIGTERM', onSigterm);
+      closeSync(stdoutFd);
+      closeSync(stderrFd);
+      resolve(result);
+    };
+
     child.on('close', (code) => {
       childExited = true;
-      clearTimeout(timer);
-      process.removeListener('SIGTERM', onSigterm);
-      closeSync(stdoutFd);
-      closeSync(stderrFd);
-      resolve({ exitCode: code ?? 1, timedOut });
+      settle({ exitCode: code ?? 1, timedOut });
     });
 
-    child.on('error', () => {
-      clearTimeout(timer);
-      process.removeListener('SIGTERM', onSigterm);
-      closeSync(stdoutFd);
-      closeSync(stderrFd);
-      resolve({ exitCode: 1, timedOut: false });
+    child.on('error', (err) => {
+      if (!settled) writeSync(stderrFd, `[scheduler] failed to spawn ${claudeBin}: ${err.message}\n`);
+      settle({ exitCode: 1, timedOut: false });
     });
   });
 }
