@@ -25,7 +25,7 @@ Bash always read it as `"${CLAUDE_SCHEDULER_STATE_DIR:-$HOME/.claude}"`.
 
 Config format:
 ```json
-{ "version": 1, "tasks": [ { "id": "...", "name": "...", "enabled": true, "trigger": { "cron": "0 9 * * *" }, "execution": { "command": "...", "workingDirectory": "...", "timeout": 300, "skipPermissions": false }, "worktree": null } ] }
+{ "version": 1, "tasks": [ { "id": "...", "name": "...", "enabled": true, "trigger": { "cron": "0 9 * * *" }, "execution": { "command": "...", "workingDirectory": "...", "timeout": 300, "skipPermissions": false, "model": "sonnet", "effort": "medium" }, "worktree": null } ] }
 ```
 
 History format: one JSON object per line — fields: `taskId`, `taskName`, `status` (`success`|`failure`|`timeout`), `startedAt`, `finishedAt`.
@@ -76,6 +76,8 @@ For each task display:
 - **Last status**: from history — success / failure / timeout / never run
 - **Working directory**
 - **Worktree**: yes / no
+- **Model**: `execution.model` if set, otherwise `default`
+- **Effort**: `execution.effort` if set, otherwise `default`
 
 ## Examples
 

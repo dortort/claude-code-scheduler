@@ -183,7 +183,9 @@ OS scheduler triggers shared executor
         "worktree": {
           "enabled": false,
           "remoteName": "origin"
-        }
+        },
+        "model": "sonnet",
+        "effort": "medium"
       },
       "tags": [],
       "createdAt": "ISO-8601",
@@ -197,6 +199,7 @@ OS scheduler triggers shared executor
 - `command` must be a natural-language prompt (slash commands not supported in scheduled execution)
 - `workingDirectory` must be an absolute path (resolved at creation time)
 - `env` keys are validated against a blocklist (PATH, HOME, USER, SHELL, LD_PRELOAD, LD_LIBRARY_PATH, DYLD_LIBRARY_PATH, DYLD_INSERT_LIBRARIES, NODE_OPTIONS, NODE_PATH, PYTHONPATH)
+- `model` (free string) and `effort` (`low`|`medium`|`high`|`xhigh`|`max`) are optional; when set they are passed as `--model` / `--effort`, otherwise the user's Claude defaults apply
 - Task IDs must match `^[a-zA-Z0-9][a-zA-Z0-9._-]*$`
 
 ### 2.4 Logging and History

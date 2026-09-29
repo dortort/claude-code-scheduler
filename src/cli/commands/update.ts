@@ -11,7 +11,7 @@ import {
 } from '../../config.js';
 import { registerTask, unregisterTask } from '../platform.js';
 import { getShimPath } from './init.js';
-import type { ScheduledTask } from '../../types.js';
+import { EFFORT_LEVELS, type ScheduledTask, type EffortLevel } from '../../types.js';
 
 export interface UpdateArgs {
   id: string;
@@ -22,6 +22,10 @@ export interface UpdateArgs {
   name?: string;
   description?: string;
   memory?: boolean;
+  /** Model alias or ID for `claude --model`. Empty string clears it (user's default applies). */
+  model?: string;
+  /** Effort level for `claude --effort`. Empty string clears it (user's default applies). */
+  effort?: string;
 }
 
 export interface UpdateResult {
@@ -41,6 +45,17 @@ export async function update(args: UpdateArgs): Promise<UpdateResult> {
       error: 'Missing required argument: --id',
     };
   }
+
+  const effort = args.effort?.trim();
+  if (effort !== undefined && effort !== '' && !isEffortLevel(effort)) {
+    return {
+      success: false,
+      configSaved: false,
+      osReregistered: false,
+      error: `Invalid --effort "${args.effort}". Must be one of: ${EFFORT_LEVELS.join(', ')}`,
+    };
+  }
+  const model = args.model?.trim();
 
   const configPath = getGlobalSchedulesPath();
   const config = await loadConfig(configPath);
@@ -66,12 +81,18 @@ export async function update(args: UpdateArgs): Promise<UpdateResult> {
     updates.trigger = { type: 'cron', expression: args.cron, timezone: existing.trigger.timezone };
   }
 
-  if (args.command !== undefined || args.timeout !== undefined || args.memory !== undefined) {
+  if (
+    args.command !== undefined || args.timeout !== undefined || args.memory !== undefined ||
+    model !== undefined || effort !== undefined
+  ) {
     updates.execution = {
       ...existing.execution,
       ...(args.command !== undefined ? { command: args.command } : {}),
       ...(args.timeout !== undefined ? { timeout: args.timeout } : {}),
       ...(args.memory !== undefined ? { memory: { enabled: args.memory, maxLines: 200, maxChars: 4000 } } : {}),
+      // An empty value clears the field so the user's Claude defaults apply again.
+      ...(model !== undefined ? { model: model || undefined } : {}),
+      ...(effort !== undefined ? { effort: (effort || undefined) as EffortLevel | undefined } : {}),
     };
   }
 
@@ -119,4 +140,8 @@ export async function update(args: UpdateArgs): Promise<UpdateResult> {
     configSaved: true,
     osReregistered,
   };
+}
+
+function isEffortLevel(value: string): value is EffortLevel {
+  return (EFFORT_LEVELS as readonly string[]).includes(value);
 }

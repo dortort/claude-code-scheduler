@@ -23,6 +23,10 @@ From the user's input, determine:
 - **Timeout**: Defaults to 300 seconds
 - **skipPermissions**: Defaults to true for scheduled tasks (headless execution cannot prompt for permissions). Set to false only if the user explicitly requests permission checks. If set to false, show a warning in the confirmation step: "Note: this task may hang if it encounters a permission prompt during unattended execution."
 - **Memory**: If the task is a recurring monitoring, checking, or alerting task (not a full report or summary), set `--memory` to enable run-to-run context. This injects the previous run's output so Claude focuses on new/changed items only. Show the inferred value in the confirmation table.
+- **Model**: Optional. A model alias (`sonnet`, `opus`, `haiku`, `fable`) or a full model ID passed to `claude --model`. Defaults to the user's Claude default (the field is left unset). Only set it when the user names a model, or when the task is a routine job (triage, checks, summaries) where a cheaper model is clearly enough — then propose it and let the user confirm.
+- **Effort**: Optional. One of `low`, `medium`, `high`, `xhigh`, `max`, passed to `claude --effort`. Defaults to the user's Claude default (the field is left unset). Same rule as model: set it only when the user asks for it or confirms your proposal.
+
+Always show model and effort in the confirmation table (as `default` when unset) so the user can change them before confirming.
 
 ### Step 2 — Validate schedule and compute next runs
 
@@ -48,6 +52,8 @@ Working directory: <absolute path>
 Timeout:          <N>s
 Skip permissions: yes / no
 Memory:           yes / no (inferred from task type)
+Model:            <alias or ID> / default
+Effort:           <level> / default
 
 Next 3 runs:
   1. <formatted date>
@@ -72,7 +78,10 @@ Run a single CLI call that handles config, OS registration, and executor install
 
 Add `--skip-permissions` if the user requested autonomous execution.
 Add `--memory` if the task benefits from run-to-run context (monitoring/checking tasks).
+Add `--model '<alias or ID>'` and/or `--effort <level>` only when the user chose a value; omit them to keep the user's defaults.
 Add `--description '<brief description>'` if appropriate.
+
+If `--effort` is not one of `low`, `medium`, `high`, `xhigh`, `max`, the CLI returns `success: false` with the list of valid levels.
 
 The CLI returns JSON: `{ "success": true, "task": { "id": "...", "name": "..." }, "configSaved": true, "osRegistered": true }`
 
@@ -114,3 +123,4 @@ Use /scheduler:run <name> to trigger it manually.
 User: "Schedule a daily code review at 9am"
 User: "Add a task to run 'Summarize git log for the past day' every weekday at 5pm"
 User: "Schedule 'Check for dependency updates' with cron 0 8 * * 1"
+User: "Schedule issue triage every hour using sonnet at medium effort"

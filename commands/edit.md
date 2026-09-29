@@ -26,6 +26,8 @@ From the user's input, determine which fields to update:
 - **Name**: New task name
 - **Description**: New description
 - **Memory**: Enable or disable run-to-run context (`--memory true` or `--memory false`)
+- **Model**: Model alias or full ID for `claude --model` (`--model sonnet`). Pass `--model ''` to clear it and go back to the user's default.
+- **Effort**: One of `low`, `medium`, `high`, `xhigh`, `max` for `claude --effort` (`--effort medium`). Pass `--effort ''` to clear it and go back to the user's default.
 
 If a new schedule is provided, validate it:
 
@@ -46,7 +48,10 @@ Show the current and new values for each changed field. Ask for confirmation.
   [--command '<new command>'] \
   [--timeout <N>] \
   [--name '<new name>'] \
-  [--description '<new description>']
+  [--description '<new description>'] \
+  [--memory true|false] \
+  [--model '<alias or ID>'] \
+  [--effort <level>]
 ```
 
 The CLI returns JSON with `success`, `taskId`, `configSaved`, and `osReregistered` fields.
@@ -61,3 +66,5 @@ The OS scheduler is re-registered only when the cron expression changes.
 User: "Change the daily-review schedule to 10am"
 User: "Update the command for hourly-check"
 User: "Set timeout to 600 for daily-review"
+User: "Run hourly-check on haiku at low effort"
+User: "Reset the model for daily-review to my default"

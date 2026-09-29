@@ -13,7 +13,9 @@ export {
   type ExecutionConfig,
   type Trigger,
   type CreateTaskInput,
+  type EffortLevel,
   BLOCKED_ENV_VARS,
+  EFFORT_LEVELS,
 } from './types.js';
 
 // Configuration
@@ -73,7 +75,7 @@ export {
 } from './vcs/index.js';
 
 // Shared executor
-export { run as runTask } from './cli/executor.js';
+export { run as runTask, buildClaudeArgs, type ClaudeArgsOptions } from './cli/executor.js';
 
 // CLI commands
 export { init, ensureExecutorInstalled, getShimPath, getExecutorPath } from './cli/commands/init.js';
