@@ -119,14 +119,74 @@ describe('update command: --model / --effort', () => {
     expect(savedTask().execution.effort).toBe('low');
   });
 
-  it('clears model and effort when given an empty value', async () => {
+  it('removes model with --clear-model and leaves effort alone', async () => {
     await add({ ...baseArgs, model: 'sonnet', effort: 'low' });
     const { id } = savedTask();
 
-    const result = await update({ id, model: '', effort: '' });
+    const result = await update({ id, clearModel: true });
     expect(result.success).toBe(true);
-    expect(savedTask().execution.model).toBeUndefined();
-    expect(savedTask().execution.effort).toBeUndefined();
+    expect(savedTask().execution).not.toHaveProperty('model');
+    expect(savedTask().execution.effort).toBe('low');
+  });
+
+  it('removes effort with --clear-effort and leaves model alone', async () => {
+    await add({ ...baseArgs, model: 'sonnet', effort: 'low' });
+    const { id } = savedTask();
+
+    const result = await update({ id, clearEffort: true });
+    expect(result.success).toBe(true);
+    expect(savedTask().execution).not.toHaveProperty('effort');
+    expect(savedTask().execution.model).toBe('sonnet');
+  });
+
+  it('removes both with --clear-model and --clear-effort together', async () => {
+    await add({ ...baseArgs, model: 'sonnet', effort: 'low' });
+    const { id } = savedTask();
+
+    const result = await update({ id, clearModel: true, clearEffort: true });
+    expect(result.success).toBe(true);
+    expect(savedTask().execution).not.toHaveProperty('model');
+    expect(savedTask().execution).not.toHaveProperty('effort');
+  });
+
+  it('clearing a field that is already unset succeeds', async () => {
+    await add(baseArgs);
+    const { id } = savedTask();
+
+    const result = await update({ id, clearModel: true, clearEffort: true });
+    expect(result.success).toBe(true);
+    expect(savedTask().execution).not.toHaveProperty('model');
+    expect(savedTask().execution).not.toHaveProperty('effort');
+  });
+
+  it('rejects an empty --model and points at --clear-model', async () => {
+    await add({ ...baseArgs, model: 'sonnet' });
+    const { id } = savedTask();
+
+    const result = await update({ id, model: '' });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('--clear-model');
+    expect(savedTask().execution.model).toBe('sonnet');
+  });
+
+  it('rejects --model together with --clear-model', async () => {
+    await add({ ...baseArgs, model: 'sonnet' });
+    const { id } = savedTask();
+
+    const result = await update({ id, model: 'opus', clearModel: true });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('both --model and --clear-model');
+    expect(savedTask().execution.model).toBe('sonnet');
+  });
+
+  it('rejects --effort together with --clear-effort', async () => {
+    await add({ ...baseArgs, effort: 'low' });
+    const { id } = savedTask();
+
+    const result = await update({ id, effort: 'high', clearEffort: true });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('both --effort and --clear-effort');
+    expect(savedTask().execution.effort).toBe('low');
   });
 
   it('rejects an unknown effort level without saving', async () => {

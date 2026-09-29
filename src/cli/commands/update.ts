@@ -22,10 +22,14 @@ export interface UpdateArgs {
   name?: string;
   description?: string;
   memory?: boolean;
-  /** Model alias or ID for `claude --model`. Empty string clears it (user's default applies). */
+  /** Model alias or ID for `claude --model`. */
   model?: string;
-  /** Effort level for `claude --effort`. Empty string clears it (user's default applies). */
+  /** Effort level for `claude --effort`. */
   effort?: string;
+  /** Remove the task's model so the user's Claude default applies again. */
+  clearModel?: boolean;
+  /** Remove the task's effort so the user's Claude default applies again. */
+  clearEffort?: boolean;
 }
 
 export interface UpdateResult {
@@ -46,8 +50,26 @@ export async function update(args: UpdateArgs): Promise<UpdateResult> {
     };
   }
 
+  const model = args.model?.trim();
+  if (model !== undefined && model === '') {
+    return {
+      success: false,
+      configSaved: false,
+      osReregistered: false,
+      error: '--model must not be empty (use --clear-model to remove it)',
+    };
+  }
+  if (model !== undefined && args.clearModel) {
+    return {
+      success: false,
+      configSaved: false,
+      osReregistered: false,
+      error: 'Cannot provide both --model and --clear-model',
+    };
+  }
+
   const effort = args.effort?.trim();
-  if (effort !== undefined && effort !== '' && !isEffortLevel(effort)) {
+  if (effort !== undefined && !isEffortLevel(effort)) {
     return {
       success: false,
       configSaved: false,
@@ -55,7 +77,14 @@ export async function update(args: UpdateArgs): Promise<UpdateResult> {
       error: `Invalid --effort "${args.effort}". Must be one of: ${EFFORT_LEVELS.join(', ')}`,
     };
   }
-  const model = args.model?.trim();
+  if (effort !== undefined && args.clearEffort) {
+    return {
+      success: false,
+      configSaved: false,
+      osReregistered: false,
+      error: 'Cannot provide both --effort and --clear-effort',
+    };
+  }
 
   const configPath = getGlobalSchedulesPath();
   const config = await loadConfig(configPath);
@@ -83,17 +112,19 @@ export async function update(args: UpdateArgs): Promise<UpdateResult> {
 
   if (
     args.command !== undefined || args.timeout !== undefined || args.memory !== undefined ||
-    model !== undefined || effort !== undefined
+    model !== undefined || effort !== undefined || args.clearModel || args.clearEffort
   ) {
     updates.execution = {
       ...existing.execution,
       ...(args.command !== undefined ? { command: args.command } : {}),
       ...(args.timeout !== undefined ? { timeout: args.timeout } : {}),
       ...(args.memory !== undefined ? { memory: { enabled: args.memory, maxLines: 200, maxChars: 4000 } } : {}),
-      // An empty value clears the field so the user's Claude defaults apply again.
-      ...(model !== undefined ? { model: model || undefined } : {}),
-      ...(effort !== undefined ? { effort: (effort || undefined) as EffortLevel | undefined } : {}),
+      ...(model !== undefined ? { model } : {}),
+      ...(effort !== undefined ? { effort: effort as EffortLevel } : {}),
     };
+    // Clearing removes the key entirely so the user's Claude defaults apply again.
+    if (args.clearModel) delete updates.execution.model;
+    if (args.clearEffort) delete updates.execution.effort;
   }
 
   const updated = updateTask(config, existing.id, updates);

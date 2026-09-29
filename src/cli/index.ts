@@ -113,6 +113,8 @@ async function main() {
             memory: { type: 'string' },
             model: { type: 'string' },
             effort: { type: 'string' },
+            'clear-model': { type: 'boolean', default: false },
+            'clear-effort': { type: 'boolean', default: false },
           },
           strict: false,
         });
@@ -127,6 +129,8 @@ async function main() {
           memory: values.memory !== undefined ? values.memory === 'true' : undefined,
           model: values.model as string | undefined,
           effort: values.effort as string | undefined,
+          clearModel: values['clear-model'] as boolean,
+          clearEffort: values['clear-effort'] as boolean,
         });
         console.log(JSON.stringify(result));
         process.exitCode = result.success ? 0 : 1;

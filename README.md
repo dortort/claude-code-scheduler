@@ -137,7 +137,7 @@ If `execution.env` also sets `ANTHROPIC_MODEL`, the explicit `execution.model` w
 `--model` flag takes precedence over the environment variable in the Claude CLI.
 
 From the CLI: `claude-scheduler-cli add ... --model sonnet --effort medium`, or
-`claude-scheduler-cli update --id <id> --model '' --effort ''` to clear both and return to your defaults.
+`claude-scheduler-cli update --id <id> --clear-model --clear-effort` to remove both and return to your defaults.
 
 The global state directory (schedules, logs, history — default `~/.claude`) can be
 relocated by setting `CLAUDE_SCHEDULER_STATE_DIR`; OS registration (launchd/cron)
