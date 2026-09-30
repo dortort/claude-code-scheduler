@@ -66,6 +66,11 @@ const WorktreeConfigSchema = z.object({
 
 // --- Execution Config ---
 
+/** Effort levels accepted by the Claude CLI `--effort` flag. */
+export const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+
+export type EffortLevel = typeof EFFORT_LEVELS[number];
+
 const MemoryConfigSchema = z.object({
   enabled: z.boolean().default(false),
   maxLines: z.number().int().positive().default(200),
@@ -84,6 +89,10 @@ export const ExecutionConfigSchema = z.object({
   worktree: WorktreeConfigSchema.optional(),
   memory: MemoryConfigSchema.optional(),
   projectPath: z.string().optional(),
+  /** Model alias (sonnet, opus, ...) or full model ID passed as `--model`. Unset = CLI default. */
+  model: z.string().trim().min(1, 'Model must not be empty').optional(),
+  /** Effort level passed as `--effort`. Unset = CLI default. */
+  effort: z.enum(EFFORT_LEVELS).optional(),
 });
 
 export type ExecutionConfig = z.infer<typeof ExecutionConfigSchema>;
@@ -217,6 +226,8 @@ export interface CreateTaskInput {
       maxChars?: number;
     };
     projectPath?: string;
+    model?: string;
+    effort?: EffortLevel;
   };
   tags?: string[];
 }
@@ -251,6 +262,8 @@ export function createTask(input: CreateTaskInput): ScheduledTask {
         maxChars: input.execution.memory.maxChars ?? 4000,
       } : undefined,
       projectPath: input.execution.projectPath,
+      model: input.execution.model,
+      effort: input.execution.effort,
     },
     tags: input.tags ?? [],
     createdAt: now,

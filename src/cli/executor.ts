@@ -27,7 +27,7 @@ import {
   generateWorktreeName,
   deriveWorktreeBranchName,
 } from '../vcs/index.js';
-import type { ScheduledTask } from '../types.js';
+import type { ScheduledTask, EffortLevel } from '../types.js';
 
 // --- Lock Management ---
 
@@ -101,17 +101,50 @@ interface SpawnResult {
   timedOut: boolean;
 }
 
+export interface ClaudeArgsOptions {
+  skipPermissions: boolean;
+  appendSystemPrompt?: string;
+  worktreeName?: string;
+  /** Passed as `--model`. Takes precedence over ANTHROPIC_MODEL in `env`. */
+  model?: string;
+  /** Passed as `--effort`. */
+  effort?: EffortLevel;
+}
+
+/**
+ * Builds the argv passed to the Claude CLI for a scheduled run.
+ * `--model` and `--effort` are only added when set on the task, so a task
+ * without them keeps whatever defaults the user's Claude settings provide.
+ */
+export function buildClaudeArgs(command: string, options: ClaudeArgsOptions): string[] {
+  const args = ['-p'];
+  if (options.worktreeName) {
+    args.push('--worktree', options.worktreeName);
+  }
+  if (options.appendSystemPrompt) {
+    args.push('--append-system-prompt', options.appendSystemPrompt);
+  }
+  if (options.model) {
+    args.push('--model', options.model);
+  }
+  if (options.effort) {
+    args.push('--effort', options.effort);
+  }
+  if (options.skipPermissions) {
+    args.push('--dangerously-skip-permissions');
+  }
+  args.push(command);
+  return args;
+}
+
 function spawnClaude(
   command: string,
-  options: {
+  options: ClaudeArgsOptions & {
     cwd: string;
-    skipPermissions: boolean;
     env?: Record<string, string>;
     stdoutPath: string;
     stderrPath: string;
     timeout: number;
-    appendSystemPrompt?: string;
-    worktreeName?: string;
     claudeBin?: string;
   },
 ): Promise<SpawnResult> {
@@ -119,17 +152,7 @@ function spawnClaude(
     const stdoutFd = openSync(options.stdoutPath, 'w');
     const stderrFd = openSync(options.stderrPath, 'w');
 
-    const args = ['-p'];
-    if (options.worktreeName) {
-      args.push('--worktree', options.worktreeName);
-    }
-    if (options.appendSystemPrompt) {
-      args.push('--append-system-prompt', options.appendSystemPrompt);
-    }
-    if (options.skipPermissions) {
-      args.push('--dangerously-skip-permissions');
-    }
-    args.push(command);
+    const args = buildClaudeArgs(command, options);
 
     const childEnv = { ...process.env, ...(options.env ?? {}) };
     const claudeBin = options.claudeBin ?? 'claude';
@@ -290,6 +313,8 @@ async function runDirect(
     stderrPath,
     timeout: task.execution.timeout,
     appendSystemPrompt,
+    model: task.execution.model,
+    effort: task.execution.effort,
     claudeBin,
   });
 }
@@ -326,6 +351,8 @@ async function runWorktree(
       timeout: task.execution.timeout,
       appendSystemPrompt,
       worktreeName,
+      model: task.execution.model,
+      effort: task.execution.effort,
       claudeBin,
     });
 

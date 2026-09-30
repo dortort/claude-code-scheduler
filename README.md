@@ -21,6 +21,7 @@
 - **Worktree isolation** — run tasks in isolated git worktrees to avoid interfering with your working copy
 - **Shared executor** — single Node.js executor for all tasks, reading config at runtime (no per-task wrapper scripts)
 - **Run-to-run memory** — optional context injection from previous output so recurring tasks focus on new/changed items
+- **Per-task model and effort** — pin a cheaper model or lower effort for routine jobs without changing your interactive defaults
 
 **Operations**
 - **Execution history** — JSONL-based history with filtering by status, task, and project
@@ -109,6 +110,34 @@ Tasks are stored in JSON config files:
 - **Project**: `<project>/.claude/schedules.json` — shared team tasks
 
 Global config takes precedence on ID collision. Project configs cannot set `skipPermissions`.
+
+### Model and effort per task
+
+Each task's `execution` block accepts two optional fields that map directly to Claude CLI flags:
+
+```json
+"execution": {
+  "command": "Triage new issues and label them",
+  "workingDirectory": "/path/to/repo",
+  "model": "sonnet",
+  "effort": "medium"
+}
+```
+
+| Field | Values | CLI flag |
+|-------|--------|----------|
+| `model` | An alias (`sonnet`, `opus`, `haiku`, `fable`) or a full model ID | `--model <model>` |
+| `effort` | `low`, `medium`, `high`, `xhigh`, `max` | `--effort <level>` |
+
+When a field is set, the scheduler passes the matching flag. When it is left out, the run uses
+whatever your Claude settings provide (`model` / `effortLevel` in `~/.claude/settings.json`), exactly
+as before. `model` is a free string so new aliases and model IDs work without a plugin release.
+
+If `execution.env` also sets `ANTHROPIC_MODEL`, the explicit `execution.model` wins, because the
+`--model` flag takes precedence over the environment variable in the Claude CLI.
+
+From the CLI: `claude-scheduler-cli add ... --model sonnet --effort medium`, or
+`claude-scheduler-cli update --id <id> --clear-model --clear-effort` to remove both and return to your defaults.
 
 The global state directory (schedules, logs, history — default `~/.claude`) can be
 relocated by setting `CLAUDE_SCHEDULER_STATE_DIR`; OS registration (launchd/cron)
