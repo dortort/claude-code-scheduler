@@ -158,4 +158,19 @@ exit ${finalExit}
     expect(result.exitCode).toBe(0);
     expect(await invocationCount()).toBe(1);
   });
+
+  it('resolves with exit 1 and logs the error when claude cannot be spawned', async () => {
+    const claudeBin = path.join(tmpDir, 'missing-claude');
+
+    const result = await spawnClaudeWithAuthRetry(
+      'do work',
+      baseOptions(claudeBin),
+      2,
+      FAST_DELAY_MS,
+    );
+
+    expect(result.exitCode).toBe(1);
+    expect(result.timedOut).toBe(false);
+    expect(await readFile(stderrPath, 'utf-8')).toContain('ENOENT');
+  });
 });
