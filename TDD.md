@@ -128,6 +128,8 @@ All types are defined in `src/types.ts` with Zod schemas for runtime validation.
       maxLines?: number;
       maxChars?: number;
     };
+    model?: string;              // Passed as `claude --model`; unset = user's default
+    effort?: "low" | "medium" | "high" | "xhigh" | "max"; // Passed as `claude --effort`
   };
   tags: string[];                // Default []
   createdAt: string;             // ISO-8601

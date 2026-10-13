@@ -11,7 +11,7 @@ import {
 } from '../../config.js';
 import { registerTask, unregisterTask } from '../platform.js';
 import { getShimPath } from './init.js';
-import type { ScheduledTask } from '../../types.js';
+import { EFFORT_LEVELS, type ScheduledTask, type EffortLevel } from '../../types.js';
 
 export interface UpdateArgs {
   id: string;
@@ -22,6 +22,14 @@ export interface UpdateArgs {
   name?: string;
   description?: string;
   memory?: boolean;
+  /** Model alias or ID for `claude --model`. */
+  model?: string;
+  /** Effort level for `claude --effort`. */
+  effort?: string;
+  /** Remove the task's model so the user's Claude default applies again. */
+  clearModel?: boolean;
+  /** Remove the task's effort so the user's Claude default applies again. */
+  clearEffort?: boolean;
 }
 
 export interface UpdateResult {
@@ -39,6 +47,42 @@ export async function update(args: UpdateArgs): Promise<UpdateResult> {
       configSaved: false,
       osReregistered: false,
       error: 'Missing required argument: --id',
+    };
+  }
+
+  const model = args.model?.trim();
+  if (model !== undefined && model === '') {
+    return {
+      success: false,
+      configSaved: false,
+      osReregistered: false,
+      error: '--model must not be empty (use --clear-model to remove it)',
+    };
+  }
+  if (model !== undefined && args.clearModel) {
+    return {
+      success: false,
+      configSaved: false,
+      osReregistered: false,
+      error: 'Cannot provide both --model and --clear-model',
+    };
+  }
+
+  const effort = args.effort?.trim();
+  if (effort !== undefined && !isEffortLevel(effort)) {
+    return {
+      success: false,
+      configSaved: false,
+      osReregistered: false,
+      error: `Invalid --effort "${args.effort}". Must be one of: ${EFFORT_LEVELS.join(', ')}`,
+    };
+  }
+  if (effort !== undefined && args.clearEffort) {
+    return {
+      success: false,
+      configSaved: false,
+      osReregistered: false,
+      error: 'Cannot provide both --effort and --clear-effort',
     };
   }
 
@@ -66,13 +110,21 @@ export async function update(args: UpdateArgs): Promise<UpdateResult> {
     updates.trigger = { type: 'cron', expression: args.cron, timezone: existing.trigger.timezone };
   }
 
-  if (args.command !== undefined || args.timeout !== undefined || args.memory !== undefined) {
+  if (
+    args.command !== undefined || args.timeout !== undefined || args.memory !== undefined ||
+    model !== undefined || effort !== undefined || args.clearModel || args.clearEffort
+  ) {
     updates.execution = {
       ...existing.execution,
       ...(args.command !== undefined ? { command: args.command } : {}),
       ...(args.timeout !== undefined ? { timeout: args.timeout } : {}),
       ...(args.memory !== undefined ? { memory: { enabled: args.memory, maxLines: 200, maxChars: 4000 } } : {}),
+      ...(model !== undefined ? { model } : {}),
+      ...(effort !== undefined ? { effort: effort as EffortLevel } : {}),
     };
+    // Clearing removes the key entirely so the user's Claude defaults apply again.
+    if (args.clearModel) delete updates.execution.model;
+    if (args.clearEffort) delete updates.execution.effort;
   }
 
   const updated = updateTask(config, existing.id, updates);
@@ -119,4 +171,8 @@ export async function update(args: UpdateArgs): Promise<UpdateResult> {
     configSaved: true,
     osReregistered,
   };
+}
+
+function isEffortLevel(value: string): value is EffortLevel {
+  return (EFFORT_LEVELS as readonly string[]).includes(value);
 }

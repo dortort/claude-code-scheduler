@@ -61,6 +61,8 @@ async function main() {
             'skip-permissions': { type: 'boolean', default: false },
             description: { type: 'string' },
             memory: { type: 'boolean', default: false },
+            model: { type: 'string' },
+            effort: { type: 'string' },
           },
           strict: false,
         });
@@ -73,6 +75,8 @@ async function main() {
           skipPermissions: values['skip-permissions'] as boolean,
           description: values.description as string | undefined,
           memory: values.memory as boolean,
+          model: values.model as string | undefined,
+          effort: values.effort as string | undefined,
         });
         console.log(JSON.stringify(result));
         process.exitCode = result.success ? 0 : 1;
@@ -107,6 +111,10 @@ async function main() {
             name: { type: 'string' },
             description: { type: 'string' },
             memory: { type: 'string' },
+            model: { type: 'string' },
+            effort: { type: 'string' },
+            'clear-model': { type: 'boolean', default: false },
+            'clear-effort': { type: 'boolean', default: false },
           },
           strict: false,
         });
@@ -119,6 +127,10 @@ async function main() {
           name: values.name as string | undefined,
           description: values.description as string | undefined,
           memory: values.memory !== undefined ? values.memory === 'true' : undefined,
+          model: values.model as string | undefined,
+          effort: values.effort as string | undefined,
+          clearModel: values['clear-model'] as boolean,
+          clearEffort: values['clear-effort'] as boolean,
         });
         console.log(JSON.stringify(result));
         process.exitCode = result.success ? 0 : 1;

@@ -8,7 +8,7 @@ import {
   addTask,
   getGlobalSchedulesPath,
 } from '../../config.js';
-import { createTask, type Trigger } from '../../types.js';
+import { createTask, EFFORT_LEVELS, type Trigger, type EffortLevel } from '../../types.js';
 import { ensureExecutorInstalled, getShimPath } from './init.js';
 import { registerTask } from '../platform.js';
 
@@ -23,6 +23,10 @@ export interface AddArgs {
   description?: string;
   memory?: boolean;
   projectPath?: string;
+  /** Model alias or ID passed to `claude --model`. Omit to use the user's default. */
+  model?: string;
+  /** Effort level passed to `claude --effort`. Omit to use the user's default. */
+  effort?: string;
 }
 
 export interface AddResult {
@@ -58,6 +62,15 @@ export async function add(args: AddArgs): Promise<AddResult> {
       configSaved: false,
       osRegistered: false,
       error: 'Must provide either --cron or --at',
+    };
+  }
+
+  if (args.effort !== undefined && !isEffortLevel(args.effort)) {
+    return {
+      success: false,
+      configSaved: false,
+      osRegistered: false,
+      error: `Invalid --effort "${args.effort}". Must be one of: ${EFFORT_LEVELS.join(', ')}`,
     };
   }
 
@@ -97,6 +110,8 @@ export async function add(args: AddArgs): Promise<AddResult> {
       skipPermissions: args.skipPermissions ?? false,
       memory: args.memory ? { enabled: true } : undefined,
       projectPath: args.projectPath,
+      model: args.model?.trim() || undefined,
+      effort: args.effort,
     },
   });
 
@@ -123,4 +138,8 @@ export async function add(args: AddArgs): Promise<AddResult> {
     configSaved: true,
     osRegistered: true,
   };
+}
+
+function isEffortLevel(value: string): value is EffortLevel {
+  return (EFFORT_LEVELS as readonly string[]).includes(value);
 }

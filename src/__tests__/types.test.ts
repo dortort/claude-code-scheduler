@@ -8,6 +8,7 @@ import {
   createTask,
   createEmptyConfig,
   BLOCKED_ENV_VARS,
+  EFFORT_LEVELS,
 } from '../types.js';
 
 describe('TriggerSchema', () => {
@@ -95,6 +96,51 @@ describe('ExecutionConfigSchema', () => {
     });
     expect(result.timeout).toBe(300);
     expect(result.skipPermissions).toBe(false);
+  });
+
+  describe('model and effort', () => {
+    it('leaves model and effort undefined by default', () => {
+      const result = ExecutionConfigSchema.parse(validExecution);
+      expect(result.model).toBeUndefined();
+      expect(result.effort).toBeUndefined();
+    });
+
+    it('accepts a model alias', () => {
+      const result = ExecutionConfigSchema.parse({ ...validExecution, model: 'sonnet' });
+      expect(result.model).toBe('sonnet');
+    });
+
+    it('accepts a full model ID (model is a free string, not an enum)', () => {
+      const result = ExecutionConfigSchema.parse({ ...validExecution, model: 'claude-sonnet-5-5' });
+      expect(result.model).toBe('claude-sonnet-5-5');
+    });
+
+    it('rejects an empty model', () => {
+      expect(() => ExecutionConfigSchema.parse({ ...validExecution, model: '' })).toThrow();
+      expect(() => ExecutionConfigSchema.parse({ ...validExecution, model: '   ' })).toThrow();
+    });
+
+    it.each(EFFORT_LEVELS)('accepts effort level "%s"', (level) => {
+      const result = ExecutionConfigSchema.parse({ ...validExecution, effort: level });
+      expect(result.effort).toBe(level);
+    });
+
+    it('rejects an unknown effort level', () => {
+      expect(() => ExecutionConfigSchema.parse({ ...validExecution, effort: 'ultra' })).toThrow();
+      expect(() => ExecutionConfigSchema.parse({ ...validExecution, effort: 'MEDIUM' })).toThrow();
+      expect(() => ExecutionConfigSchema.parse({ ...validExecution, effort: 3 })).toThrow();
+    });
+
+    it('allows model and effort alongside ANTHROPIC_MODEL in env', () => {
+      const result = ExecutionConfigSchema.parse({
+        ...validExecution,
+        env: { ANTHROPIC_MODEL: 'opus' },
+        model: 'sonnet',
+        effort: 'low',
+      });
+      expect(result.env).toEqual({ ANTHROPIC_MODEL: 'opus' });
+      expect(result.model).toBe('sonnet');
+    });
   });
 });
 
@@ -306,6 +352,31 @@ describe('createTask', () => {
       },
     });
     expect(() => ScheduledTaskSchema.parse(task)).not.toThrow();
+  });
+
+  it('carries model and effort through to the task', () => {
+    const task = createTask({
+      name: 'Triage',
+      trigger: { type: 'cron', expression: '0 9 * * *', timezone: 'local' },
+      execution: {
+        command: 'triage',
+        workingDirectory: '/tmp',
+        model: 'sonnet',
+        effort: 'medium',
+      },
+    });
+    expect(task.execution.model).toBe('sonnet');
+    expect(task.execution.effort).toBe('medium');
+  });
+
+  it('leaves model and effort unset when not provided', () => {
+    const task = createTask({
+      name: 'Triage',
+      trigger: { type: 'cron', expression: '0 9 * * *', timezone: 'local' },
+      execution: { command: 'triage', workingDirectory: '/tmp' },
+    });
+    expect(task.execution.model).toBeUndefined();
+    expect(task.execution.effort).toBeUndefined();
   });
 });
 
