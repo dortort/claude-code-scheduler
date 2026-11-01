@@ -136,6 +136,18 @@ describe('artifact paths', () => {
     assert.equal(pageFromFileBody('t.html', ['/r']), 't.html')
     assert.equal(pageFromFileBody('/r/../etc/passwd', ['/r']), null)
   })
+  test('pageFromFileBody matches Windows drive paths in every form a page sends', () => {
+    const root = 'C:\\Users\\me\\proj\\.claude\\artifacts'
+    for (const page of [
+      'C:\\Users\\me\\proj\\.claude\\artifacts\\sub\\u.html', // native path
+      '/C:/Users/me/proj/.claude/artifacts/sub/u.html', // a file:// URL's decoded pathname
+      'c:/users/ME/proj/.claude/artifacts/sub/u.html' // Windows paths ignore case
+    ]) assert.equal(pageFromFileBody(page, [root]), 'sub/u.html', page)
+    assert.equal(pageFromFileBody('/C:/Users/me/proj/.claude/artifacts/sub/u.html', ['C:/Users/me/proj/.claude/artifacts/']), 'sub/u.html')
+    assert.equal(pageFromFileBody('/C:/Users/me/proj/.claude/artifacts/../secret.html', [root]), null)
+    assert.equal(pageFromFileBody('/D:/Users/me/proj/.claude/artifacts/u.html', [root]), null)
+    assert.equal(pageFromFileBody('C:/Users/me/proj/.claude/artifacts2/u.html', [root]), null)
+  })
   test('pageFromReferer', () => {
     assert.equal(pageFromReferer('http://127.0.0.1:5/a/t.html?x=1', 5), 't.html')
     assert.equal(pageFromReferer('http://localhost:5/a/sub/my%20t.html', 5), 'sub/my t.html')
