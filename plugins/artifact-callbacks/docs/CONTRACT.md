@@ -146,13 +146,17 @@ Checks run in this order; the first failure answers.
 | --- | --- |
 | `GET /_cb/health` | `200 {"ok":true,"paused":<from status.json>}` |
 | `GET /_cb/client.js` | `200`, `text/javascript; charset=utf-8`, the client file. No secrets in it. A `Sec-Fetch-Site` other than `same-origin` or `none` (or `cross-site` when `CB_ALLOW_FILE_ORIGIN=1`, for file:// pages) → bare `403`, `rejected/sec-fetch-site`, so another site cannot run the client; absent is allowed (older browsers). |
-| `GET /a/<path>` | Serve a regular file from `CB_ROOT`. URL-decoded path; reject `..` segments, NUL, backslashes (raw or `%5c`), empty segments, dotfile segments (`/.x`, also `.` and `..`), bad percent-encoding; every refusal is a bare `404`. `realpath` must be inside `realpath(CB_ROOT)` (symlinks pointing out → 404). Directories → 404 (no listings, no index). MIME by extension (html, js, mjs, css, json, svg, png, jpg, jpeg, gif, webp, ico, txt, md, woff, woff2, map; else `application/octet-stream`). For `.html` (extension compared case-insensitively): set `Set-Cookie: cb_session_<port>=<cookie>; HttpOnly; SameSite=Strict; Path=/` and record the page path (relative to root, `/`-separated, e.g. `triage.html`, `sub/x.html`) in the served-pages set. |
+| `GET /a/<path>` | Serve a regular file from `CB_ROOT`. URL-decoded path; reject `..` segments, NUL, backslashes (raw or `%5c`), empty segments, dotfile segments (`/.x`, also `.` and `..`), bad percent-encoding; every refusal is a bare `404`. `realpath` must be inside `realpath(CB_ROOT)` (symlinks pointing out → 404). Directories → 404 (no listings, no index). MIME by extension (html, js, mjs, css, json, svg, png, jpg, jpeg, gif, webp, ico, txt, md, woff, woff2, map; else `application/octet-stream`). For `.html` (extension compared case-insensitively): set `Set-Cookie: cb_session_<port>=<cookie>; HttpOnly; SameSite=Strict; Path=/_cb/` and record the page path (relative to root, `/`-separated, e.g. `triage.html`, `sub/x.html`) in the served-pages set. |
 | `POST /_cb/event` | See below. |
 | `GET /_cb/events/<id>` | `<id>` must match `^ev_[a-z0-9]{10}$` (else `404`). Auth as for POST steps a, b and d (no content-type; Origin only checked when present). In token mode `X-CB-Token` must equal the page token of the event's `page` (status.json record, else the sidecar's own record). `200 {"id","state","turnStartedAt"?, "turnEndedAt"?, "note"?, "reason"?}` from status.json (only those keys, copied when present, `null` included), else from the sidecar's own record of ids it issued (`queued`, or `dropped` with `reason`), else `404`. Auth runs before the lookup. |
 | `GET /_cb/events/<id>/stream` | M5. Same auth. `text/event-stream`. See Streaming. |
 
 Cookie name: `cb_session_<port>` (deviation from the spec's `cb_session`: cookies are not
 port-scoped, so two sessions on `127.0.0.1` would otherwise overwrite each other's cookie).
+Cookie path: `/_cb/` (deviation from the spec's original `Path=/`, now in SPEC too): only the
+routes that check it receive it, and since cookies ignore ports, `Path=/` would send it with
+every request to any `127.0.0.1` port. It still reaches another port's `/_cb/` paths; SPEC's
+security model lists that residual risk.
 Cookie value: `HMAC-SHA256(key=CB_SECRET, msg=String(port))`, lowercase hex.
 Page token (file mode): `HMAC-SHA256(key=CB_SECRET, msg="page:" + <page path relative to root>)`, lowercase hex.
 Compare with constant-time equality.
