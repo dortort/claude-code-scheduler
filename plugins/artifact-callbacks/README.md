@@ -139,7 +139,10 @@ to `127.0.0.1`; the design assumes that.
 
 Pages you ask Claude to build from untrusted content (issue bodies, web pages) are the
 main residual risk: the confirm band, on-disk template matching and the skill's rules
-(no untrusted text in templates, escape everything shown) are the defences. Use
+(no untrusted text in templates, escape everything shown) are the defences. They stop
+injected markup, not injected script: all pages share one origin, so script running in
+one page can send events as any other page, including one you already trusted. Files
+other than `.html` are served sandboxed, so an SVG cannot do the same. Use
 `confirm: always` on shared machines: other OS users can reach the loopback port too,
 and the session cookie is not a secret from them (anyone who fetches a served page gets
 one, and browsers send it to their `/_cb/` paths on other `127.0.0.1` ports, since cookies

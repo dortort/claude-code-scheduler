@@ -289,6 +289,15 @@ describe('g. page resolution', () => {
     assert.equal(await pageOf({ headers: { referer: `https://evil.example/a/sub/q.html` }, body: { v: 1, action: 'x', page: 'p.html' } }), 'p.html')
   })
 
+  test('residual (SPEC security model): page identity is not authenticated between served pages', async () => {
+    // Every /a/ page shares one origin, so script in one served page can claim another,
+    // by dropping the Referer and naming it in body.page, or by forging a same-origin
+    // Referer. SPEC and CONTRACT state this; the confirm band and template matching stop
+    // injected markup, not injected script.
+    assert.equal(await pageOf({ headers: { referer: undefined }, body: { v: 1, action: 'x', page: 'sub/q.html' } }), 'sub/q.html')
+    assert.equal(await pageOf({ headers: { referer: `${L.origin}/a/sub/q.html` } }), 'sub/q.html')
+  })
+
   test('neither Referer nor body names a served page → 403 page', async () => {
     const cases: [Headers, unknown][] = [
       [{ referer: undefined }, { v: 1, action: 'x' }],

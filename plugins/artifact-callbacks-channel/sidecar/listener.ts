@@ -351,6 +351,10 @@ function start (cfg: CheckedConfig): void {
         // Path=/_cb/: only the routes that check it get it. Cookies ignore ports, so with
         // Path=/ every request to any 127.0.0.1 port (another user's server) would carry it.
         res.setHeader('Set-Cookie', `${cookieKey}=${cookie}; HttpOnly; SameSite=Strict; Path=/_cb/`)
+      } else {
+        // Anything else opened on its own (an SVG, say) gets an opaque origin and no
+        // scripts, so it can never post events as this origin.
+        res.setHeader('Content-Security-Policy', 'sandbox')
       }
       res.setHeader('Content-Type', mimeFor(rel))
       res.writeHead(200)
