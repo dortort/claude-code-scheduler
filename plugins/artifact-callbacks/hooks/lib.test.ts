@@ -32,6 +32,7 @@ import {
 } from './lib/queue.ts'
 import { buildStatus, composeText, encodePagePath, serializeStatus, statusLine, statusReport } from './lib/status.ts'
 import { ReplyStream, STREAM_TEXT_CAP } from './lib/stream.ts'
+import { hmacSha256, pageToken, tokenTags } from './lib/token.ts'
 import {
   DEFAULT_TEMPLATE,
   JSON_CAP,
@@ -423,5 +424,26 @@ describe('stream', () => {
     expect(s.text('yz')).toBe(true)
     expect(s.text('more')).toBe(false)
     expect(s.truncated).toBe(true)
+  })
+})
+
+describe('token', () => {
+  const hex = (b: Uint8Array): string => [...b].map(x => x.toString(16).padStart(2, '0')).join('')
+
+  test('page tokens match HMAC-SHA256 as node computes it', async () => {
+    expect(await pageToken('ab'.repeat(32), 'triage.html')).toBe('81410826d3a645b7c712645b3f42e79d16b96b2e6f45e571c4d3d7916f5163fe')
+    // A key longer than the block is hashed first.
+    expect(await pageToken('k'.repeat(100), 'a/b c.html')).toBe('4dc3c7ca86965d87c0f3a03cd5d0c6066ca6ddc8eefdcb5d8bb9ef7b8abe26ed')
+    expect(hex(await hmacSha256(new Uint8Array(0), new Uint8Array(0)))).toBe(
+      'b613679a0814d9ec772f95d778c35fc5ff1697c493715653c6c712144292c5ad',
+    )
+  })
+
+  test('the head tags for a file:// page', () => {
+    const tags = tokenTags(51234, 'a"b.html', 'f00')
+    expect(tags).toContain('<meta name="cb-token" content="f00">')
+    expect(tags).toContain('<meta name="cb-endpoint" content="http://127.0.0.1:51234">')
+    expect(tags).toContain('<meta name="cb-page" content="a&quot;b.html">')
+    expect(tags).toContain('<script src="http://127.0.0.1:51234/_cb/client.js" defer></script>')
   })
 })

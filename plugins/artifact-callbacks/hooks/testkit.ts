@@ -107,6 +107,7 @@ export function engine(on: On, options: KitOptions = {}) {
   const logs: string[] = []
   const invalidated: string[] = []
   const commands: string[] = []
+  const tools: string[] = []
   const randomPorts = [...(options.randomPorts ?? [51234, 51235, 51236, 51237, 51238, 51239])]
   const runtimes = options.runtimes ?? { node: true, python3: true, py: true }
   let turnSeq = 0
@@ -125,6 +126,10 @@ export function engine(on: On, options: KitOptions = {}) {
   on('command.register', (_$, e) => {
     commands.push(e.name)
     return { value: { command: e.name } }
+  })
+  on('tool.register', (_$, e) => {
+    tools.push(e.name)
+    return { value: { tool: `mcp__artifact-callbacks__${e.name}` } }
   })
   on('ui.toast', (_$, e) => {
     toasts.push(e.text)
@@ -271,6 +276,7 @@ export function engine(on: On, options: KitOptions = {}) {
     logs,
     invalidated,
     commands,
+    tools,
 
     /** Lets every chain under way run as far as it can. */
     async settle(rounds = 40): Promise<void> {

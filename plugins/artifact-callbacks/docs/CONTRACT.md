@@ -255,3 +255,8 @@ token mode carry:
 - `/callbacks` subcommands per SPEC; `open` uses `open` (macOS), `xdg-open` (Linux),
   `cmd /c start ""` (Windows).
 - Status line `callbacks :<port> · <n> queued`; toast per accepted event `"<page> → <action>"`.
+- file:// token mode (`allowFileOrigin`): the mod registers the tool `page_token`
+  (`mcp__artifact-callbacks__page_token`, input `{ page }`, a path relative to the
+  artifacts folder) that answers the page's `cb-token`, `cb-endpoint` and `cb-page` meta
+  tags and the absolute client script tag; the compose section then mentions it. This is
+  how "Claude Code gives you a per-page token" in the skill happens.

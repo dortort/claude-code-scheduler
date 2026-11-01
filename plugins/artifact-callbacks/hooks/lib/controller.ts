@@ -42,6 +42,7 @@ import {
 import { buildStatus, composeText, encodePagePath, serializeStatus, statusLine, statusReport } from './status.ts'
 import { ReplyStream, STREAM_FLUSH_MS } from './stream.ts'
 import { DEFAULT_MAX_PROMPT_CHARS, renderContext, renderPrompt } from './template.ts'
+import { pageToken, tokenTags } from './token.ts'
 
 export const PLUGIN = 'artifact-callbacks'
 /** How long session.start and /callbacks start wait for the ready line. */
@@ -979,7 +980,20 @@ export function createController(config: Config) {
     /** The compose section's text while it is shown; undefined while not. */
     composeSection(): string | undefined {
       if (!composeVisible() || listener.port === null) return undefined
-      return composeText(listener.port, config.artifactsDir?.replace(/[\\/]+$/, ''))
+      const text = composeText(listener.port, config.artifactsDir?.replace(/[\\/]+$/, ''))
+      if (!config.allowFileOrigin) return text
+      return `${text}\nFor a page the user will open from disk (file://), call the page_token tool for its head tags.`
+    },
+
+    /** The page_token tool: head tags for a file:// page, or why not. */
+    async pageTokenTags(pageArg: unknown): Promise<{ text: string; isError: boolean }> {
+      if (!config.allowFileOrigin) return { text: 'file:// token mode is off (allowFileOrigin).', isError: true }
+      const page = typeof pageArg === 'string' ? normalizePage(pageArg) : undefined
+      if (!page) return { text: 'page must be a path relative to the artifacts folder, such as triage.html.', isError: true }
+      if (!session || listener.state !== 'up' || listener.port === null) {
+        return { text: `The listener is ${listener.state}; there is no endpoint to give a token for.`, isError: true }
+      }
+      return { text: tokenTags(listener.port, page, await pageToken(session.secret, page)), isError: false }
     },
 
     /** Run on the band; never rejects. */

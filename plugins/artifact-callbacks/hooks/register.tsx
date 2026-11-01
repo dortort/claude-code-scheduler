@@ -11,6 +11,7 @@ import type { Register } from 'claude-code'
 import { configFrom, createController, type Effects, type Snapshot } from './lib/controller.ts'
 import { firstAwaiting } from './lib/queue.ts'
 import { COMPOSE_SECTION_ID } from './lib/status.ts'
+import { PAGE_TOKEN_TOOL } from './lib/token.ts'
 
 export const register: Register = (on, options) => {
   const cb = createController(configFrom(options))
@@ -68,6 +69,21 @@ export const register: Register = (on, options) => {
       },
       sessionId: () => $.session.id(),
       osVar: () => $.env.get('OS'),
+    }
+    if (!isRemote && cb.config.allowFileOrigin) {
+      await $.tool.register({
+        name: PAGE_TOKEN_TOOL,
+        description:
+          'Artifact Callbacks, file:// token mode: returns the head tags (cb-token, cb-endpoint, cb-page meta tags and ' +
+          'the client script) for an interactive page the user will open straight from disk. Prefer the served ' +
+          'http://127.0.0.1 link; use this only for file:// pages.',
+        inputSchema: {
+          type: 'object',
+          properties: { page: { type: 'string', description: 'The page path relative to the artifacts folder, e.g. triage.html' } },
+          required: ['page'],
+        },
+        isDeferred: false,
+      })
     }
     if (!isRemote) {
       await $.command.register({
@@ -142,6 +158,11 @@ export const register: Register = (on, options) => {
         </Box>
       </Box>
     )
+  })
+
+  on('tool.call', { tool: 'mcp__artifact-callbacks__page_token' }, async ($, e) => {
+    const { text, isError } = await cb.pageTokenTags((e as { page?: unknown }).page)
+    return isError ? { deny: text } : { result: text }
   })
 
   on('command.run', { command: 'callbacks' }, async ($, e) => ({ text: await cb.command(e.args) }))
