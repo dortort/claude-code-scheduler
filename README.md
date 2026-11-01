@@ -54,9 +54,15 @@ plugins/
 Claude-specific plugins and mods live under `plugins/`. The marketplace installs
 the scheduler's published npm package, which includes compiled JavaScript, rather
 than its unbuilt source directory. Its npm name remains `@dortort/scheduler`.
-The skills entry references `dortort/skills` directly. Artifact Callbacks ships its
-TypeScript sources as they are (Node >= 22.18 runs them without a build step), so its
-entry is a relative path to its folder.
+The skills entry references the independently maintained `dortort/skills` repository
+directly. The callback variants ship their TypeScript sources as they are (Node >=
+22.18 runs them without a build step). Their entries use released Git subdirectories,
+pinned by release tag and full commit SHA.
+
+The three plugins maintained here install exact published releases: the scheduler pins
+an npm version, and both callback variants pin a tag and commit. Merging development
+changes does not advance those pins. A release is made available to marketplace users
+by merging a separate catalog promotion PR; see [Releasing plugins](RELEASING.md).
 
 ## Development
 
@@ -69,9 +75,11 @@ npm test
 npm run build
 ```
 
-From the repository root, validate the marketplace and load the built scheduler:
+From the repository root, validate the release pins and marketplace, then load the built scheduler:
 
 ```bash
+node scripts/marketplace.mjs check
+node --test scripts/marketplace.test.mjs
 claude plugin validate .
 claude plugin validate plugins/scheduler
 claude --plugin-dir ./plugins/scheduler
