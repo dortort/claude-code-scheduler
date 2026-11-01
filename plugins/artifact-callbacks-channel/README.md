@@ -4,10 +4,24 @@ The [Artifact Callbacks](../artifact-callbacks/README.md) mod, rebuilt as a Clau
 **channel**: an MCP server that spawns the same loopback-only listener and forwards each
 click on a page Claude wrote into the running session as a channel message.
 
-Use the mod if you can. This build is for sessions on the research-preview channels path,
-and it inherits the preview's limits: it needs a claude.ai login or a Console API key, Team
-and Enterprise admins must enable channels (`channelsEnabled`), and because it is not on
+Use the [mod](../artifact-callbacks/README.md#mod-or-channel-build) if you can: it has a
+confirm band, one turn per click and no preview flags. This build inherits the channels
+research preview's limits: it needs a claude.ai login or a Console API key, Team and
+Enterprise admins must enable channels (`channelsEnabled`), and because it is not on
 Anthropic's channel allowlist it only loads with the development flag.
+
+## When to choose this build
+
+- **Hooks modules don't load in your Claude Code.** The mod depends on them, and they are
+  an early-access surface. This build reaches the session through an MCP server instead.
+- **You want clicks delivered mid-turn.** A click arrives as a `<channel>` message while
+  Claude is working, batched with any others, so Claude can fold a stream of small inputs
+  (a checklist, a live dashboard) into the work in progress. The mod gives every click a
+  turn of its own, after the current one ends.
+- **You want Claude to choose what the page sees.** `callbacks_reply` sends text Claude
+  picks for the page; the mod's `streamReplies` streams the whole turn.
+
+What you give up is in the table below and in [Security](#security).
 
 | | Mod (`artifact-callbacks`) | Channel (`artifact-callbacks-channel`) |
 | --- | --- | --- |
@@ -15,8 +29,29 @@ Anthropic's channel allowlist it only loads with the development flag.
 | Confirm band before the first event of a page | Yes (`confirm` option) | No: you opted in with the flag |
 | `running` / `done` | When the event's turn starts / completes | When the event is forwarded / when Claude calls `callbacks_done` |
 | Pause | `/callbacks pause` | Ask Claude; it calls `callbacks_pause` |
+| Remote and SSH sessions | Stays off | Not checked: starts a listener your browser cannot reach |
 | Reply streaming | `streamReplies` option (the turn's text) | `callbacks_reply` (text Claude chooses to send) |
 | Listener, security checks, `client.js`, page wiring | Same files | Same files (byte-identical copies) |
+
+## Security
+
+The listener and its request checks are the mod's (see the mod's
+[security model](../artifact-callbacks/README.md#security-model)), with three differences
+that matter:
+
+- **No confirm band.** Every accepted click is forwarded at once. In the mod, the confirm
+  band is the defence against the two risks the shared listener cannot close: script in
+  one served page can send events as any other page (all pages share one origin), and
+  other users on the same machine can reach the loopback port and obtain the session
+  cookie. Here nothing stands between those events and the session, so only serve pages
+  you trust, and avoid this build on shared machines.
+- **No remote or SSH check.** The mod stays off in claude.ai cloud sessions and SSH logins,
+  where the loopback is the remote machine's, not your browser's. This build does not check
+  `CLAUDE_CODE_REMOTE` or the `SSH_*` variables: it starts its listener anyway, and a
+  browser on your own machine cannot reach it without a tunnel.
+- **`done` depends on Claude.** An event stays `running` until Claude calls
+  `callbacks_done`, or 10 minutes pass. Five unacknowledged events fill the queue and
+  further clicks are refused with `queue-full` (see [Event states](#event-states)).
 
 ## Install and run
 
