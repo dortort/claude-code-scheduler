@@ -4,7 +4,7 @@ import type {
   ArtifactCallbacksEventRecord as EventRecord,
   ArtifactCallbacksEventState as EventState,
   ArtifactCallbacksPending as Pending,
-} from '../../types'
+} from '../../types/index.d.ts'
 
 /** Pending events (queued or awaiting approval) the mod holds at most. */
 export const MAX_PENDING = 5

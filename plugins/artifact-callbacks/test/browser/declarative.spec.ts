@@ -1,6 +1,7 @@
 // Declarative data-cb-* wiring in real Chromium against a real listener.
 import { test, describe, before, after } from 'node:test'
 import assert from 'node:assert/strict'
+import { buildStatus, serializeStatus } from '../../hooks/lib/status.ts'
 import { launch, startListener, page, events, settledEvents, open, waitAttr, attr, waitFor } from './helpers.ts'
 import type { Browser, Listener } from './helpers.ts'
 
@@ -281,6 +282,38 @@ describe('data-cb-state lifecycle from status.json', () => {
       await ctx.close()
     }
   })
+
+  for (const reason of ['paused', 'queue-full'] as const) {
+    test(`accepted by the listener, then dropped by the mod (${reason}): the page names the reason`, async () => {
+      // The race: status.json said not paused and not full when the listener answered
+      // 202, but the mod was paused (or full) by the time it read the event line.
+      const file = `late-${reason}.html`
+      L.writePage(file, page('<button id="r" data-cb-action="x">X</button>'))
+      const m = mark()
+      const { page: p, ctx } = await open(browser, `${L.origin}/a/${file}`)
+      try {
+        await p.click('#r')
+        await waitFor(() => events(L).length > m, { what: 'event' })
+        const ev = events(L)[m]
+        const rec = {
+          id: String(ev.id), state: 'dropped' as const, page: file, action: 'x', label: 'X', receivedAt: 1,
+          turnStartedAt: null, turnEndedAt: null, note: reason, coalescedInto: null, expiresAt: null, turnId: null, dataKey: '{}'
+        }
+        // What the mod writes, through its own serializer.
+        L.writeStatus(serializeStatus(buildStatus({ paused: reason === 'paused', queue: [], events: [rec] })))
+        await waitAttr(p, '#r', 'data-cb-detail', 'dropped')
+        assert.equal(await attr(p, '#r', 'data-cb-state'), 'rejected')
+        assert.equal(await attr(p, '#r', 'data-cb-reason'), reason)
+        await p.waitForSelector('[data-cb-toast="error"]')
+        const text = String(await p.locator('[data-cb-toast="error"]').textContent())
+        assert.match(text, reason === 'paused' ? /paused/ : /too many events are already waiting/)
+        assert.doesNotMatch(text, /\(dropped\)/)
+      } finally {
+        L.writeStatus({ paused: false })
+        await ctx.close()
+      }
+    })
+  }
 })
 
 describe('stale tab', () => {

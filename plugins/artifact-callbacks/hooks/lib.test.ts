@@ -1,7 +1,7 @@
 // Unit tests of the pure helpers under hooks/lib (run by `claude plugin test`).
 
 import { describe, expect, test } from 'claude-code/testing'
-import type { ArtifactCallbacksEventRecord as EventRecord, ArtifactCallbacksPending as Pending } from '../types'
+import type { ArtifactCallbacksEventRecord as EventRecord, ArtifactCallbacksPending as Pending } from '../types/index.d.ts'
 import {
   BACKOFF_MS,
   MAX_RESTARTS,
@@ -213,6 +213,22 @@ describe('status', () => {
     })
     expect(JSON.parse(serializeStatus(status))).toEqual(status)
     expect(serializeStatus(status).endsWith('\n')).toBe(true)
+  })
+
+  test('a dropped record carries its reason for the page; other records never do', () => {
+    const events = [
+      rec({ id: 'p', state: 'dropped', note: 'paused' }),
+      rec({ id: 'q', state: 'dropped', note: 'queue-full' }),
+      rec({ id: 'r', state: 'dropped', note: 'rate-limit' }),
+      rec({ id: 'c', state: 'dropped', note: 'coalesced' }),
+      rec({ id: 'd', state: 'done', note: 'paused' }),
+    ]
+    const out = buildStatus({ paused: false, queue: [], events }).events
+    expect(out.p?.reason).toBe('paused')
+    expect(out.q?.reason).toBe('queue-full')
+    expect(out.r?.reason).toBe('rate-limit')
+    expect('reason' in (out.c ?? {})).toBe(false)
+    expect('reason' in (out.d ?? {})).toBe(false)
   })
 
   test('status.json keeps the newest 200 events', () => {

@@ -10,7 +10,7 @@ import type {
   ArtifactCallbacksListener as Listener,
   ArtifactCallbacksPending as Pending,
   ArtifactCallbacksSession as Session,
-} from '../../types'
+} from '../../types/index.d.ts'
 import {
   HEALTHY_MS,
   NODE_PROBE,
