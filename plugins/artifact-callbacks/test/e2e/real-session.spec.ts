@@ -80,10 +80,13 @@ async function unavailable (): Promise<string | undefined> {
     // Only a successful run's stdout counts: a failed run's error message quotes the
     // command line, prompt and all, so it would contain the expected word too.
     const why = await new Promise<string | undefined>((resolve) => {
-      execFile('claude', ['-p', 'Reply with the single word pong in capitals.'], { cwd: probe, env: sessionEnv(), timeout: 120_000 }, (err, stdout, stderr) => {
+      const child = execFile('claude', ['-p', 'Reply with the single word pong in capitals.'], { cwd: probe, env: sessionEnv(), timeout: 120_000 }, (err, stdout, stderr) => {
         if (err) resolve(`exit ${String(err.code ?? err.signal)}: ${(stderr || stdout).trim().slice(0, 200)}`)
         else resolve(stdout.includes('PONG') ? undefined : `unexpected reply: ${stdout.trim().slice(0, 200)}`)
       })
+      // Close stdin, or claude -p waits 3 s for piped input and its warning about
+      // that becomes the reported reason instead of the real error.
+      child.stdin?.end()
     })
     if (why !== undefined) return `no model access from a nested claude (${why})`
   } finally {
