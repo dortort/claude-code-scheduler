@@ -108,3 +108,7 @@ Update local `--plugin-dir` paths to that directory and build there before use.
 ## License
 
 [MIT](LICENSE)
+
+## Releases
+
+See the [release process](RELEASING.md) for independent plugin versions, tags, and release notes.

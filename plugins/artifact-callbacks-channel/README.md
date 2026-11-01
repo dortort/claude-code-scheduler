@@ -154,3 +154,7 @@ The files under `sidecar/` and `server/shared/` are copies of the mod's. Change 
 `plugins/artifact-callbacks`, then run `npm run sync` and commit both; `npm run sync:check`
 and `test/drift.spec.ts` fail while they differ. The browser suite needs Playwright with
 Chromium (`npx playwright install chromium`).
+
+## Releases
+
+See the [release process](../../RELEASING.md) for independent plugin versions, tags, and release notes.
