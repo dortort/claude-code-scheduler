@@ -77,17 +77,26 @@ describe('marketplace.json', () => {
     }
   })
 
-  test('lists artifact-callbacks from its folder', () => {
+  test('lists artifact-callbacks from its released folder and commit', () => {
     const e = m.plugins.find((p) => p.name === 'artifact-callbacks')
     assert.ok(e, 'artifact-callbacks entry')
-    assert.equal(e.source, './plugins/artifact-callbacks')
+    assert.equal(typeof e.source, 'object')
+    const source = e.source as Record<string, unknown>
+    assert.equal(source.source, 'git-subdir')
+    assert.equal(source.path, 'plugins/artifact-callbacks')
+    assert.match(source.ref as string, /^artifact-callbacks--v\d+\.\d+\.\d+$/)
+    assert.match(source.sha as string, /^[a-f0-9]{40}$/)
   })
 
   test('lists every plugins/artifact-callbacks* folder that has a manifest', () => {
     for (const dir of ['artifact-callbacks', 'artifact-callbacks-channel']) {
       if (!existsSync(join(REPO_DIR, 'plugins', dir, '.claude-plugin', 'plugin.json'))) continue
       const name = readJson<PluginManifest>(REPO_DIR, 'plugins', dir, '.claude-plugin', 'plugin.json').name
-      assert.ok(m.plugins.some((p) => p.name === name && p.source === `./plugins/${dir}`), `${dir} is listed`)
+      const entry = m.plugins.find((p) => p.name === name)
+      assert.ok(entry && typeof entry.source === 'object', `${dir} is listed`)
+      const source = entry.source as Record<string, unknown>
+      assert.equal(source.source, 'git-subdir')
+      assert.equal(source.path, `plugins/${dir}`)
     }
   })
 

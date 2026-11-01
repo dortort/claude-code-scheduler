@@ -12,8 +12,10 @@
       "description": "Schedule recurring and one-time AI tasks using native OS schedulers",
       "source": {
         "source": "npm",
-        "package": "@dortort/scheduler"
-      }
+        "package": "@dortort/scheduler",
+        "version": "0.4.1"
+      },
+      "version": "0.4.1"
     },
     {
       "name": "dortort",
@@ -26,12 +28,26 @@
     {
       "name": "artifact-callbacks",
       "description": "Turn clicks on HTML pages Claude writes into follow-up prompts in the running session, through a loopback-only listener",
-      "source": "./plugins/artifact-callbacks"
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/dortort/claude-plugins.git",
+        "path": "plugins/artifact-callbacks",
+        "ref": "artifact-callbacks--v0.1.1",
+        "sha": "66503ac17857845d26b2c380802ec3edf3fa138c"
+      },
+      "version": "0.1.1"
     },
     {
       "name": "artifact-callbacks-channel",
       "description": "Channel build of Artifact Callbacks: clicks on HTML pages Claude writes arrive in the running session as channel messages (research preview, development flag)",
-      "source": "./plugins/artifact-callbacks-channel"
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/dortort/claude-plugins.git",
+        "path": "plugins/artifact-callbacks-channel",
+        "ref": "artifact-callbacks-channel--v0.1.1",
+        "sha": "66503ac17857845d26b2c380802ec3edf3fa138c"
+      },
+      "version": "0.1.1"
     }
   ]
 }
