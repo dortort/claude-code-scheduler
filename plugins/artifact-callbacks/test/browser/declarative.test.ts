@@ -1,9 +1,10 @@
 // Declarative data-cb-* wiring in real Chromium against a real listener.
 import { test, describe, before, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { launch, startListener, page, events, settledEvents, open, waitAttr, attr, waitFor } from './helpers.mjs'
+import { launch, startListener, page, events, settledEvents, open, waitAttr, attr, waitFor } from './helpers.ts'
+import type { Browser, Listener } from './helpers.ts'
 
-let browser, L
+let browser: Browser, L: Listener
 before(async () => {
   browser = await launch()
   L = await startListener()
@@ -45,7 +46,7 @@ describe('buttons and links', () => {
       await waitAttr(p, '#fix', 'data-cb-state', 'queued')
       assert.equal(await attr(p, '#fix', 'data-cb-event'), ev.id)
       await p.waitForSelector('[data-cb-toast]')
-      assert.match(await p.locator('[data-cb-toast]').first().textContent(), /Sent to Claude: Fix this/)
+      assert.match(String(await p.locator('[data-cb-toast]').first().textContent()), /Sent to Claude: Fix this/)
       assert.deepEqual(p.__errors || [], [])
     } finally {
       await ctx.close()
@@ -106,7 +107,7 @@ describe('data-cb-confirm', () => {
     const m = mark()
     const { page: p, ctx } = await open(browser, `${L.origin}/a/confirm.html`)
     try {
-      const messages = []
+      const messages: string[] = []
       p.once('dialog', (d) => { messages.push(d.message()); d.dismiss() })
       await p.click('#del')
       assert.equal((await settledEvents(L)).length, m)
@@ -257,7 +258,7 @@ describe('data-cb-state lifecycle from status.json', () => {
       await waitAttr(p, '#e', 'data-cb-detail', 'expired')
       assert.equal(await attr(p, '#e', 'data-cb-state'), 'rejected')
       await p.waitForSelector('[data-cb-toast="error"]')
-      assert.match(await p.locator('[data-cb-toast="error"]').textContent(), /Expired/)
+      assert.match(String(await p.locator('[data-cb-toast="error"]').textContent()), /Expired/)
     } finally {
       await ctx.close()
     }
@@ -273,7 +274,7 @@ describe('data-cb-state lifecycle from status.json', () => {
       assert.equal(await attr(p, '#p', 'data-cb-detail'), 'dropped')
       assert.equal(await attr(p, '#p', 'data-cb-reason'), 'paused')
       await p.waitForSelector('[data-cb-toast="error"]')
-      assert.match(await p.locator('[data-cb-toast="error"]').textContent(), /paused/)
+      assert.match(String(await p.locator('[data-cb-toast="error"]').textContent()), /paused/)
       await L.waitLine((l) => l.type === 'dropped' && l.reason === 'paused' && l.servedPage === 'paused.html')
     } finally {
       L.writeStatus({ paused: false })
@@ -294,7 +295,7 @@ describe('stale tab', () => {
       assert.equal(await attr(p, '#t', 'data-cb-reason'), 'template-changed')
       const toast = p.locator('[data-cb-toast="error"]')
       await toast.waitFor()
-      assert.match(await toast.textContent(), /changed.*Reload/s)
+      assert.match(String(await toast.textContent()), /changed.*Reload/s)
       await L.waitLine((l) => l.type === 'rejected' && l.reason === 'template-changed')
       assert.equal((await settledEvents(L)).length, m)
       await Promise.all([p.waitForEvent('load'), p.click('[data-cb-toast-action]')])

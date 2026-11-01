@@ -11,8 +11,10 @@ import {
   normalizeArtifactPath, checkRelativePath, pageFromBody, pageFromFileBody, pageFromReferer,
   resolveInsideRoot, mimeFor, isHtmlPath, decodeEntities, extractAttributeValues,
   extractPromptTemplates, validateBody, cpLength, parseStatus, publicRecord,
-  SlidingWindow, RateLimiter, IdempotencyCache, sseFrame, NdjsonSplitter, SECRET_RE
-} from '../../sidecar/lib.mjs'
+  SlidingWindow, RateLimiter, IdempotencyCache, sseFrame, NdjsonSplitter, SECRET_RE,
+  isEventRecord, streamLine
+} from '../../sidecar/lib.ts'
+import type { EventBody, StdoutLine } from '../../sidecar/lib.ts'
 
 const SECRET = '0123456789abcdef0123456789abcdef'
 
@@ -171,6 +173,10 @@ describe('artifact paths', () => {
     assert.equal(mimeFor('y.jpeg'), 'image/jpeg')
     assert.equal(mimeFor('y.exe'), 'application/octet-stream')
     assert.equal(mimeFor('noext'), 'application/octet-stream')
+    // only the table's own keys: never Object.prototype members
+    assert.equal(mimeFor('x.constructor'), 'application/octet-stream')
+    assert.equal(mimeFor('x.toString'), 'application/octet-stream')
+    assert.equal(mimeFor('x.__proto__'), 'application/octet-stream')
     assert.ok(isHtmlPath('p.html'))
     assert.ok(!isHtmlPath('p.htm'))
   })
@@ -223,10 +229,15 @@ describe('validateBody', () => {
     const r = validateBody({ v: 1, action: 'a-b_1', label: 'L', data: { x: [1] }, prompt: 'p', idempotencyKey: 'k', page: 'p.html', extra: 1 })
     assert.deepEqual(r.value, { v: 1, action: 'a-b_1', label: 'L', data: { x: [1] }, prompt: 'p', idempotencyKey: 'k', page: 'p.html' })
   })
+  test('keeps the contract key order and drops unknown keys', () => {
+    const body: EventBody | undefined = validateBody({ page: 'p.html', idempotencyKey: 'k', prompt: 'P', data: { a: 1 }, label: 'L', extra: 1, action: 'x', v: 1 }).value
+    assert.deepEqual(Object.keys(body ?? {}), ['v', 'action', 'label', 'data', 'prompt', 'idempotencyKey', 'page'])
+    assert.deepEqual(Object.keys(validateBody({ action: 'x', v: 1 }).value ?? {}), ['v', 'action', 'data'])
+  })
   test('null optional fields count as absent', () => {
     assert.deepEqual(validateBody({ v: 1, action: 'x', label: null, data: null, prompt: null }).value, { v: 1, action: 'x', data: {} })
   })
-  const bad = [
+  const bad: [unknown, RegExp][] = [
     [null, /^body/], [[], /^body/], ['s', /^body/],
     [{ action: 'x' }, /^v /], [{ v: 2, action: 'x' }, /^v /], [{ v: '1', action: 'x' }, /^v /],
     [{ v: 1 }, /^action/], [{ v: 1, action: 'Fix' }, /^action/], [{ v: 1, action: 'a'.repeat(41) }, /^action/], [{ v: 1, action: '' }, /^action/],
@@ -246,7 +257,7 @@ describe('validateBody', () => {
   test('lengths count code points', () => {
     assert.equal(cpLength('\u{1F600}'), 1)
     assert.ok(validateBody({ v: 1, action: 'x', label: '\u{1F600}'.repeat(200) }).value)
-    assert.equal(validateBody({ v: 1, action: 'x', label: 'l'.repeat(200) }).value.label.length, 200)
+    assert.equal(validateBody({ v: 1, action: 'x', label: 'l'.repeat(200) }).value?.label?.length, 200)
   })
 })
 
@@ -256,9 +267,15 @@ describe('status', () => {
     assert.equal(parseStatus('[]'), null)
     assert.deepEqual(parseStatus('{}'), { v: 1, paused: false, queueDepth: 0, events: {} })
     const s = parseStatus(JSON.stringify({ v: 1, paused: true, queueDepth: 3, events: { a: { state: 'running' } } }))
+    assert.ok(s)
     assert.equal(s.paused, true)
     assert.equal(s.queueDepth, 3)
-    assert.equal(s.events.a.state, 'running')
+    assert.deepEqual(s.events.a, { state: 'running' })
+  })
+  test('isEventRecord accepts objects with a string state only', () => {
+    assert.ok(isEventRecord({ state: 'running' }))
+    assert.ok(isEventRecord({ id: 'ev_1', state: 'done', page: 'p.html' }))
+    for (const bad of [null, undefined, 'done', 5, [], {}, { state: 1 }, { state: null }]) assert.ok(!isEventRecord(bad), JSON.stringify(bad))
   })
   test('publicRecord', () => {
     assert.deepEqual(publicRecord('ev_1', { id: 'ev_1', state: 'done', page: 'p', action: 'a', turnStartedAt: 1, turnEndedAt: 2, note: null }),
@@ -305,5 +322,24 @@ describe('sse', () => {
     assert.deepEqual(s.push(':2}\nbad\n[1]\n\n'), [{ b: 2 }])
     assert.deepEqual(s.push('{"c":3}'), [])
     assert.deepEqual(s.push('\n'), [{ c: 3 }])
+  })
+  test('streamLine keeps text, state and end lines in their wire shape', () => {
+    assert.deepEqual(streamLine({ type: 'text', text: 'hi', extra: 1 }), { type: 'text', text: 'hi' })
+    assert.deepEqual(streamLine({ type: 'state', state: 'running' }), { type: 'state', state: 'running' })
+    assert.deepEqual(streamLine({ type: 'end', why: 'x' }), { type: 'end' })
+    for (const bad of [{ type: 'text', text: 5 }, { type: 'state' }, { type: 'other' }, {}]) assert.equal(streamLine(bad), null)
+  })
+})
+
+describe('wire types', () => {
+  test('StdoutLine covers every line type in the contract', () => {
+    const lines: StdoutLine[] = [
+      { type: 'ready', port: 51234, pid: 4411 },
+      { type: 'event', id: 'ev_8f3k2a0000', receivedAt: 1, servedPage: 'p.html', body: { v: 1, action: 'fix', data: {}, page: 'p.html' } },
+      { type: 'rejected', reason: 'origin', origin: 'https://evil.example', path: '/_cb/event' },
+      { type: 'dropped', id: 'ev_8f3k2a0000', reason: 'paused', servedPage: 'p.html' },
+      { type: 'error', reason: 'port-in-use', message: 'port 1 is already in use' }
+    ]
+    assert.deepEqual(lines.map((l) => l.type), ['ready', 'event', 'rejected', 'dropped', 'error'])
   })
 })

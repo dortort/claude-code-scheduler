@@ -5,15 +5,16 @@ import { appendFileSync, copyFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { createHmac } from 'node:crypto'
-import { launch, startListener, page, events, settledEvents, open, waitAttr, attr, sleep } from './helpers.mjs'
-import { makeDirs } from '../conformance/harness.mjs'
+import { launch, startListener, page, events, settledEvents, open, waitAttr, attr, sleep } from './helpers.ts'
+import type { Browser, Listener } from './helpers.ts'
+import { makeDirs } from '../conformance/harness.ts'
 
-let browser
+let browser: Browser
 before(async () => { browser = await launch() })
 after(async () => { await browser.close() })
 
 describe('imperative API', () => {
-  let L
+  let L: Listener
   before(async () => {
     const dirs = makeDirs()
     L = await startListener({ dirs, env: { CB_STREAM_DIR: dirs.streams } })
@@ -37,6 +38,7 @@ describe('imperative API', () => {
         window.__donePromise = ev.done.then((h) => 'resolved:' + h.state, (e) => 'rejected:' + e.state)
         return ev.id
       })
+      assert.ok(id)
       const [ev] = (await settledEvents(L)).slice(m)
       assert.equal(ev.id, id)
       assert.equal(ev.body.action, 'reorder')
@@ -73,6 +75,7 @@ describe('imperative API', () => {
           window.__p = ev.done.then(() => 'resolved', (e) => 'rejected:' + e.state)
           return ev.id
         })
+        assert.ok(id)
         L.writeStatus({ events: { [id]: { id, state: terminal, page: 'app.html', action: 'y' } } })
         assert.equal(await p.evaluate(() => window.__p), 'rejected:' + terminal)
       }
@@ -113,6 +116,7 @@ describe('imperative API', () => {
         window.__done = ev.done.then(() => 'done')
         return ev.id
       })
+      assert.ok(id)
       const file = join(L.dirs.streams, `${id}.ndjson`)
       appendFileSync(file, JSON.stringify({ type: 'state', state: 'running' }) + '\n')
       appendFileSync(file, JSON.stringify({ type: 'text', text: 'Because ' }) + '\n')
@@ -136,8 +140,9 @@ describe('imperative API', () => {
     const { page: p, ctx } = await open(browser, `${L.origin}/a/mix.html`)
     try {
       await p.click('#b')
-      await p.waitForFunction(() => document.querySelector('#b').hasAttribute('data-cb-event'))
+      await p.waitForFunction(() => document.querySelector('#b')?.hasAttribute('data-cb-event'))
       const id = await attr(p, '#b', 'data-cb-event')
+      assert.ok(id)
       L.writeStatus({ events: { [id]: { id, state: 'done', page: 'mix.html', action: 'mix' } } })
       await waitAttr(p, '#b', 'data-cb-state', 'done')
     } finally {
@@ -147,7 +152,7 @@ describe('imperative API', () => {
 })
 
 describe('file:// token mode', () => {
-  function filePage (L, rel, { token = true, endpoint = true, extra = '' } = {}) {
+  function filePage (L: Listener, rel: string, { token = true, endpoint = true, extra = '' } = {}): string {
     const tok = createHmac('sha256', Buffer.from(L.secret, 'utf8')).update('page:' + rel).digest('hex')
     const metas = (token ? `<meta name="cb-token" content="${tok}">` : '') +
       (endpoint ? `<meta name="cb-endpoint" content="${L.origin}">` : '') + extra

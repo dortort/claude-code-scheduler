@@ -2,11 +2,12 @@
 import { test, describe, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { join } from 'node:path'
-import { startListener, assertBaseHeaders, hmac, EVENT_ID } from './harness.mjs'
+import { startListener, assertBaseHeaders, hmac, EVENT_ID } from './harness.ts'
+import type { Headers, Listener, Response } from './harness.ts'
 
 const PAGE = '<!doctype html><button data-cb-action="fix" data-cb-prompt="Fix it">Fix</button>'
 
-function tokenPost (L, body, { token, headers = {} } = {}) {
+function tokenPost (L: Listener, body: unknown, { token, headers = {} }: { token?: string; headers?: Headers } = {}): Promise<Response> {
   return L.req({
     method: 'POST',
     path: '/_cb/event',
@@ -21,13 +22,13 @@ function tokenPost (L, body, { token, headers = {} } = {}) {
   })
 }
 
-function assertNoCors (r) {
+function assertNoCors (r: Response): void {
   for (const k of Object.keys(r.headers)) assert.ok(!k.startsWith('access-control-'), `unexpected ${k}`)
 }
 
 describe('token mode enabled', () => {
-  let L
-  const tok = (page) => hmac(L.secret, 'page:' + page)
+  let L: Listener
+  const tok = (page: string): string => hmac(L.secret, 'page:' + page)
   before(async () => {
     L = await startListener({ env: { CB_ALLOW_FILE_ORIGIN: '1' } })
     L.writePage('t.html', PAGE)
@@ -70,7 +71,7 @@ describe('token mode enabled', () => {
     assert.equal(r.headers['access-control-allow-origin'], 'null')
   })
 
-  const bad = [
+  const bad: [string, (L: Listener) => [unknown, string | undefined]][] = [
     ['missing token', (L) => [{ v: 1, action: 'fix', page: 't.html' }, undefined]],
     ['wrong token', (L) => [{ v: 1, action: 'fix', page: 't.html' }, 'f'.repeat(64)]],
     ['token of another page', (L) => [{ v: 1, action: 'fix', page: 't.html' }, hmac(L.secret, 'page:sub/u.html')]],
@@ -118,9 +119,9 @@ describe('token mode enabled', () => {
       assert.equal(r.status, 204, path)
       assertBaseHeaders(assert, r, { acao: true })
       assert.equal(r.headers['access-control-allow-origin'], 'null')
-      assert.match(r.headers['access-control-allow-methods'], /POST/)
-      assert.match(r.headers['access-control-allow-headers'].toLowerCase(), /x-cb-token/)
-      assert.match(r.headers['access-control-allow-headers'].toLowerCase(), /content-type/)
+      assert.match(String(r.headers['access-control-allow-methods']), /POST/)
+      assert.match(String(r.headers['access-control-allow-headers']).toLowerCase(), /x-cb-token/)
+      assert.match(String(r.headers['access-control-allow-headers']).toLowerCase(), /content-type/)
       assert.equal(r.headers['access-control-allow-private-network'], 'true')
       assert.equal(r.headers['access-control-allow-credentials'], undefined)
     }
@@ -163,7 +164,7 @@ describe('token mode enabled', () => {
 })
 
 describe('token mode disabled (default)', () => {
-  let L
+  let L: Listener
   before(async () => {
     L = await startListener()
     L.writePage('t.html', PAGE)

@@ -6,7 +6,9 @@ import { spawn } from 'node:child_process'
 import { join } from 'node:path'
 import {
   startListener, makeDirs, freePort, waitFor, pidAlive, sleep, request, PLUGIN_DIR, LISTENER_CMD
-} from './harness.mjs'
+} from './harness.ts'
+import type { Dirs, Line, StartOptions } from './harness.ts'
+import type { AddressInfo } from 'node:net'
 
 describe('ready line', () => {
   test('random port: ready line is the first stdout line, nothing else is printed', async () => {
@@ -63,7 +65,7 @@ describe('ready line', () => {
 })
 
 describe('configuration errors', () => {
-  async function expectError (env, reason, code, dirs) {
+  async function expectError (env: StartOptions['env'], reason: string, code?: number, dirs?: Dirs): Promise<Line> {
     const L = await startListener({ env, wait: false, dirs })
     try {
       const exit = await L.exited
@@ -82,9 +84,9 @@ describe('configuration errors', () => {
 
   test('port in use → error/port-in-use, exit 2', async () => {
     const blocker = net.createServer()
-    await new Promise((resolve) => blocker.listen(0, '127.0.0.1', resolve))
+    await new Promise<void>((resolve) => blocker.listen(0, '127.0.0.1', resolve))
     try {
-      await expectError({ CB_PORT: String(blocker.address().port) }, 'port-in-use', 2)
+      await expectError({ CB_PORT: String((blocker.address() as AddressInfo).port) }, 'port-in-use', 2)
     } finally {
       blocker.close()
     }
@@ -124,7 +126,7 @@ describe('configuration errors', () => {
 })
 
 describe('exit conditions', () => {
-  for (const sig of ['SIGTERM', 'SIGINT']) {
+  for (const sig of ['SIGTERM', 'SIGINT'] as const) {
     test(`exits on ${sig}`, async () => {
       const L = await startListener()
       try {

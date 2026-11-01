@@ -1,9 +1,10 @@
 // CSRF from other origins, in real Chromium: nothing another page does may produce an event.
 import { test, describe, before, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { launch, startListener, page, events, open, otherServer, sleep } from './helpers.mjs'
+import { launch, startListener, page, events, open, otherServer, sleep } from './helpers.ts'
+import type { Browser, Listener, OtherServer } from './helpers.ts'
 
-let browser, L, spy
+let browser: Browser, L: Listener, spy: OtherServer
 before(async () => {
   browser = await launch()
   L = await startListener()
@@ -18,7 +19,7 @@ after(async () => {
   await L.cleanup()
 })
 
-function attackPage (target, spyUrl) {
+function attackPage (target: string, spyUrl: string): string {
   const body = JSON.stringify({ v: 1, action: 'evil', data: { from: 'attacker' }, page: 'p.html' })
   return `<!doctype html><meta charset="utf-8"><body>
 <iframe name="sink1"></iframe><iframe name="sink2"></iframe><iframe name="sink3"></iframe>
@@ -50,7 +51,7 @@ Promise.all([
 </script>`
 }
 
-async function runAttack (attackerHost) {
+async function runAttack (attackerHost: string) {
   // The victim has a legit tab open, so the browser holds the session cookie.
   const { ctx } = await open(browser, `${L.origin}/a/p.html`)
   const cookies = await ctx.cookies(L.origin)

@@ -3,13 +3,14 @@ import { test, describe, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { startListener, assertBaseHeaders, EVENT_ID, request, sleep, rawSocket } from './harness.mjs'
+import { startListener, assertBaseHeaders, EVENT_ID, request, sleep, rawSocket } from './harness.ts'
+import type { Listener, Line, Response, Headers } from './harness.ts'
 
-const checked = new WeakSet()
+const checked = new WeakSet<Line>()
 const PAGE = '<!doctype html><button data-cb-action="fix">Fix</button>'
 
 /** Assert a rejection: status, empty (or given) body, headers, and its stdout line. */
-async function expectRejected (L, res, status, reason, { json } = {}) {
+async function expectRejected (L: Listener, res: Response, status: number, reason: string, { json }: { json?: unknown } = {}): Promise<Line> {
   assert.equal(res.status, status, `status for ${reason}: ${res.body}`)
   assertBaseHeaders(assert, res)
   if (json === undefined) assert.equal(res.body, '')
@@ -24,7 +25,7 @@ async function expectRejected (L, res, status, reason, { json } = {}) {
   return line
 }
 
-async function newEvents (L) {
+async function newEvents (L: Listener): Promise<Line[]> {
   const idx = await L.marker()
   const out = L.lines.slice(0, idx).filter((l) => !checked.has(l) && (l.type === 'event' || l.type === 'dropped'))
   for (const l of L.lines.slice(0, idx + 1)) checked.add(l)
@@ -32,7 +33,7 @@ async function newEvents (L) {
 }
 
 describe('accepting an event', () => {
-  let L
+  let L: Listener
   before(async () => {
     L = await startListener()
     await L.serve('p.html', PAGE)
@@ -45,7 +46,7 @@ describe('accepting an event', () => {
     const r = await L.post({ v: 1, action: 'fix', label: 'Fix this', data: { test: 't7', n: [1, { a: null }] }, idempotencyKey: 'k-accept', extra: 'dropped', page: 'p.html' })
     assert.equal(r.status, 202)
     assertBaseHeaders(assert, r)
-    assert.match(r.headers['content-type'], /^application\/json/)
+    assert.match(String(r.headers['content-type']), /^application\/json/)
     assert.deepEqual(Object.keys(r.json).sort(), ['id', 'state'])
     assert.match(r.json.id, EVENT_ID)
     assert.equal(r.json.state, 'queued')
@@ -99,7 +100,7 @@ describe('accepting an event', () => {
 })
 
 describe('rejections in check order', () => {
-  let L
+  let L: Listener
   before(async () => {
     L = await startListener()
     await L.serve('p.html', PAGE)
@@ -178,7 +179,7 @@ describe('rejections in check order', () => {
   })
 
   test('f. schema errors → 400 {"error"} naming the field', async () => {
-    const cases = [
+    const cases: [string, RegExp][] = [
       ['not json', /^body/],
       ['[1,2]', /^body/],
       ['null', /^body/],
@@ -219,7 +220,7 @@ describe('rejections in check order', () => {
 })
 
 describe('g. page resolution', () => {
-  let L
+  let L: Listener
   before(async () => {
     L = await startListener()
     await L.serve('p.html', PAGE)
@@ -228,7 +229,7 @@ describe('g. page resolution', () => {
   })
   after(() => L.cleanup())
 
-  async function pageOf (opts) {
+  async function pageOf (opts: { body?: unknown; headers?: Headers }): Promise<unknown> {
     const r = await L.post(opts.body ?? { v: 1, action: 'x' }, { headers: opts.headers ?? {} })
     assert.equal(r.status, 202, JSON.stringify(opts))
     const [ev] = await newEvents(L)
@@ -248,7 +249,7 @@ describe('g. page resolution', () => {
   })
 
   test('neither Referer nor body names a served page → 403 page', async () => {
-    const cases = [
+    const cases: [Headers, unknown][] = [
       [{ referer: undefined }, { v: 1, action: 'x' }],
       [{ referer: undefined }, { v: 1, action: 'x', page: 'never-served.html' }],
       [{ referer: `${L.origin}/a/never-served.html` }, { v: 1, action: 'x' }],
@@ -268,7 +269,7 @@ describe('g. page resolution', () => {
 })
 
 describe('h. prompt templates are verified against the page on disk', () => {
-  let L
+  let L: Listener
   const html = `<!doctype html>
     <button data-cb-action="a" data-cb-prompt="Fix {{data.test}} &amp; report &lt;now&gt;">A</button>
     <button data-cb-action="b" data-cb-prompt='Say "hi" to {{label}}'>B</button>
@@ -312,7 +313,7 @@ describe('h. prompt templates are verified against the page on disk', () => {
 })
 
 describe('i. idempotency', () => {
-  let L
+  let L: Listener
   before(async () => {
     L = await startListener()
     await L.serve('p.html', PAGE)
@@ -474,7 +475,7 @@ describe('j. admission', () => {
 })
 
 describe('GET /_cb/events/<id>', () => {
-  let L, id
+  let L: Listener, id: string
   before(async () => {
     L = await startListener()
     await L.serve('p.html', PAGE)
@@ -486,7 +487,7 @@ describe('GET /_cb/events/<id>', () => {
     const r = await L.getEvent(id)
     assert.equal(r.status, 200)
     assertBaseHeaders(assert, r)
-    assert.match(r.headers['content-type'], /^application\/json/)
+    assert.match(String(r.headers['content-type']), /^application\/json/)
     assert.deepEqual(r.json, { id, state: 'queued' })
   })
 
