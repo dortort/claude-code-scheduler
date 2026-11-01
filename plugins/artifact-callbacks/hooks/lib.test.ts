@@ -5,13 +5,16 @@ import type { ArtifactCallbacksEventRecord as EventRecord, ArtifactCallbacksPend
 import {
   BACKOFF_MS,
   MAX_RESTARTS,
+  MIN_NODE,
+  NODE_PROBE,
   backoffDelay,
-  noRuntimeReason,
+  checkNode,
+  listenerArgv,
+  nodeReason,
   openCommand,
-  parseRuntime,
+  parseNodeVersion,
   platformFrom,
   randomHex,
-  runtimeCandidates,
 } from './lib/host.ts'
 import { LineSplitter, parseLine } from './lib/ndjson.ts'
 import { artifactsDir, isAbsolute, join, normalizePage, runDir, safeSegment } from './lib/paths.ts'
@@ -71,9 +74,9 @@ describe('template', () => {
     const t = renderTemplate('Fix {{data.test}} in {{data.file.path}}', {
       page: 'p',
       action: 'a',
-      data: { test: 'a"b`c\nd', file: { path: 'x.py' } },
+      data: { test: 'a"b`c\nd', file: { path: 'x.ts' } },
     })
-    expect(t).toBe(`Fix "a'b'c d" in "x.py"`)
+    expect(t).toBe(`Fix "a'b'c d" in "x.ts"`)
     const long = renderTemplate('{{data.x}}', { page: 'p', action: 'a', data: { x: 'y'.repeat(900) } })
     expect(long.length).toBe(PLACEHOLDER_CAP + 2)
     expect(long.endsWith('…"')).toBe(true)
@@ -220,7 +223,7 @@ describe('status', () => {
   })
 
   test('the status line per listener state', () => {
-    const base = { state: 'up' as const, port: 51234, pid: 1, reason: null, restarts: 0, runtime: 'node' }
+    const base = { state: 'up' as const, port: 51234, pid: 1, reason: null, restarts: 0, nodeVersion: 'v22.18.0' }
     expect(statusLine(base, 1, false)).toBe('callbacks :51234 · 1 queued')
     expect(statusLine(base, 0, true)).toBe('callbacks :51234 · paused · 0 queued')
     expect(statusLine({ ...base, state: 'starting' }, 0, false)).toBe('callbacks starting…')
@@ -243,7 +246,7 @@ describe('status', () => {
   })
 
   test('the report lists the listener, pages, trust, queue and events', () => {
-    const listener = { state: 'up' as const, port: 4000, pid: 9, reason: null, restarts: 1, runtime: 'node' }
+    const listener = { state: 'up' as const, port: 4000, pid: 9, reason: null, restarts: 1, nodeVersion: 'v22.18.0' }
     const events = Array.from({ length: 12 }, (_, i) =>
       rec({ id: `ev_${i}`, page: 't.html', action: 'fix', state: 'done', receivedAt: 1000 * i, note: i === 11 ? 'interrupted' : null }),
     )
@@ -258,7 +261,7 @@ describe('status', () => {
       policy: 'first-per-page',
       now: 12_000,
     })
-    expect(text).toContain('Listener: up at http://127.0.0.1:4000/ (pid 9, node)')
+    expect(text).toContain('Listener: up at http://127.0.0.1:4000/ (pid 9, node v22.18.0)')
     expect(text).toContain('PAUSED')
     expect(text).toContain('http://127.0.0.1:4000/a/sub/a%20b.html')
     expect(text).toContain('Trusted pages: t.html')
@@ -266,7 +269,7 @@ describe('status', () => {
     expect(text).toContain('ev_11  t.html → fix  done (interrupted)  1s ago')
     expect(text).not.toContain('ev_1  ')
     const down = statusReport({
-      listener: { ...listener, state: 'down', reason: 'neither node nor python3 found', port: null },
+      listener: { ...listener, state: 'down', reason: 'node-too-old: found Node v18.19.0, need >= 22.18.0', port: null },
       paused: false,
       queue: [],
       events: [],
@@ -276,7 +279,7 @@ describe('status', () => {
       policy: 'never',
       now: 0,
     })
-    expect(down).toContain('Listener: down: neither node nor python3 found')
+    expect(down).toContain('Listener: down: node-too-old: found Node v18.19.0, need >= 22.18.0')
     expect(down).toContain('Pages served: none yet')
     expect(down).toContain('Events: none yet')
     expect(encodePagePath('a b/c#.html')).toBe('a%20b/c%23.html')
@@ -316,21 +319,43 @@ describe('host', () => {
     expect(platformFrom(undefined, undefined)).toBe('linux')
   })
 
-  test('runtime candidates per option and platform', () => {
-    expect(parseRuntime('python3')).toBe('python3')
-    expect(parseRuntime('x')).toBe('auto')
-    const auto = runtimeCandidates('auto', 'linux')
-    expect(auto.map(c => c.probe)).toEqual([['node', '--version'], ['python3', '--version']])
-    expect(auto[0]?.argv('/p')).toEqual(['node', '/p/sidecar/listener.mjs'])
-    expect(auto[1]?.argv('/p')).toEqual(['python3', '/p/sidecar/listener.py'])
-    const win = runtimeCandidates('auto', 'win32')
-    expect(win[1]?.probe).toEqual(['py', '-3', '--version'])
-    expect(win[1]?.argv('/p')).toEqual(['py', '-3', '/p/sidecar/listener.py'])
-    expect(runtimeCandidates('node', 'darwin').map(c => c.name)).toEqual(['node'])
-    expect(runtimeCandidates('python3', 'darwin').map(c => c.name)).toEqual(['python3'])
-    expect(noRuntimeReason('auto')).toBe('neither node nor python3 found')
-    expect(noRuntimeReason('node')).toContain('node not found')
-    expect(noRuntimeReason('python3')).toContain('python3 not found')
+  test('node version parsing', () => {
+    expect(parseNodeVersion('v22.18.0\n')).toEqual([22, 18, 0])
+    expect(parseNodeVersion('24.1.2')).toEqual([24, 1, 2])
+    expect(parseNodeVersion('v23.0.0-nightly20250101abc')).toEqual([23, 0, 0])
+    expect(parseNodeVersion('v22.18')).toBeUndefined()
+    expect(parseNodeVersion('v22.x')).toBeUndefined()
+    expect(parseNodeVersion('')).toBeUndefined()
+  })
+
+  test('the node check needs 22.18.0 or later', () => {
+    expect(MIN_NODE).toBe('22.18.0')
+    expect(NODE_PROBE).toEqual(['node', '--version'])
+    const ok = (stdout: string) => checkNode({ exitCode: 0, stdout })
+    expect(checkNode(undefined)).toEqual({ isOk: false, problem: 'node-missing', found: null })
+    expect(checkNode({ exitCode: 127, stdout: '' })).toEqual({ isOk: false, problem: 'node-missing', found: null })
+    expect(ok('v18.19.0\n')).toEqual({ isOk: false, problem: 'node-too-old', found: 'v18.19.0' })
+    expect(ok('v22.17.9\n')).toEqual({ isOk: false, problem: 'node-too-old', found: 'v22.17.9' })
+    expect(ok('v21.99.99')).toEqual({ isOk: false, problem: 'node-too-old', found: 'v21.99.99' })
+    expect(ok('v22.18.0\n')).toEqual({ isOk: true, version: 'v22.18.0' })
+    expect(ok('v22.23.1')).toEqual({ isOk: true, version: 'v22.23.1' })
+    expect(ok('v24.0.0')).toEqual({ isOk: true, version: 'v24.0.0' })
+    expect(ok('v100.0.0')).toEqual({ isOk: true, version: 'v100.0.0' })
+    expect(ok('hello world')).toEqual({ isOk: false, problem: 'node-missing', found: 'hello world' })
+    expect(ok('')).toEqual({ isOk: false, problem: 'node-missing', found: null })
+    expect(ok('x'.repeat(100))).toMatchObject({ found: 'x'.repeat(40) })
+  })
+
+  test('node reasons name the code, the found and the minimum version', () => {
+    expect(nodeReason({ isOk: false, problem: 'node-missing', found: null })).toBe('node-missing: no node on PATH, need Node >= 22.18.0')
+    expect(nodeReason({ isOk: false, problem: 'node-too-old', found: 'v18.19.0' })).toBe('node-too-old: found Node v18.19.0, need >= 22.18.0')
+    expect(nodeReason({ isOk: false, problem: 'node-missing', found: 'garbage' })).toBe(
+      'node-missing: `node --version` printed "garbage", need Node >= 22.18.0',
+    )
+  })
+
+  test('the sidecar runs the TypeScript listener under node', () => {
+    expect(listenerArgv('/p')).toEqual(['node', '/p/sidecar/listener.ts'])
   })
 
   test('open commands per platform', () => {

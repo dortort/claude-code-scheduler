@@ -1,13 +1,7 @@
-// Host facts: the platform, which runtime runs the sidecar, how to open a
-// URL, and the restart schedule.
+// Host facts: the platform, whether Node is new enough to run the sidecar,
+// how to open a URL, and the restart schedule.
 
 export type Platform = 'darwin' | 'linux' | 'win32'
-export type RuntimeOption = 'auto' | 'node' | 'python3'
-export type RuntimeName = 'node' | 'python3'
-
-export function parseRuntime(value: unknown): RuntimeOption {
-  return value === 'node' || value === 'python3' ? value : 'auto'
-}
 
 /** The platform from what the host reports: `OS` and `uname -s`. */
 export function platformFrom(osVar: string | undefined, uname: string | undefined): Platform {
@@ -18,45 +12,60 @@ export function platformFrom(osVar: string | undefined, uname: string | undefine
   return 'linux'
 }
 
-export type RuntimeCandidate = {
-  name: RuntimeName
-  /** The command that proves the runtime is there (exit code 0). */
-  probe: readonly string[]
-  /** The sidecar's argv for this runtime. */
-  argv: (pluginRoot: string) => string[]
+/** The oldest Node that runs `sidecar/listener.ts` (type stripping on by default). */
+export const MIN_NODE = '22.18.0'
+/** The command whose output says which Node is on PATH. */
+export const NODE_PROBE: readonly string[] = ['node', '--version']
+
+type Version = readonly [number, number, number]
+
+/** `v22.18.0` (or `22.18.0`) as numbers; undefined for anything else. */
+export function parseNodeVersion(text: string): Version | undefined {
+  const m = /^v?(\d+)\.(\d+)\.(\d+)(?:[-+][0-9A-Za-z.-]*)?$/.exec(text.trim())
+  if (!m) return undefined
+  return [Number(m[1]), Number(m[2]), Number(m[3])]
 }
 
-const NODE: RuntimeCandidate = {
-  name: 'node',
-  probe: ['node', '--version'],
-  argv: root => ['node', `${root}/sidecar/listener.mjs`],
+function isAtLeast(v: Version, min: Version): boolean {
+  for (let i = 0; i < 3; i += 1) {
+    if (v[i]! !== min[i]!) return v[i]! > min[i]!
+  }
+  return true
 }
 
-const PYTHON: RuntimeCandidate = {
-  name: 'python3',
-  probe: ['python3', '--version'],
-  argv: root => ['python3', `${root}/sidecar/listener.py`],
+/** Why the listener cannot start, as a stable code. */
+export type NodeProblem = 'node-missing' | 'node-too-old'
+
+/** The outcome of running `node --version`. */
+export type NodeCheck =
+  | { isOk: true; version: string }
+  | { isOk: false; problem: NodeProblem; found: string | null }
+
+/**
+ * Judges the result of `node --version`: `undefined` when the command could
+ * not run at all. A non-zero exit or output that is not a version counts as
+ * no usable Node; `found` keeps what it printed for the person.
+ */
+export function checkNode(result: { exitCode: number; stdout: string } | undefined): NodeCheck {
+  if (!result || result.exitCode !== 0) return { isOk: false, problem: 'node-missing', found: null }
+  const printed = result.stdout.trim()
+  const version = parseNodeVersion(printed)
+  if (!version) return { isOk: false, problem: 'node-missing', found: printed === '' ? null : printed.slice(0, 40) }
+  const shown = `v${version.join('.')}`
+  const min = parseNodeVersion(MIN_NODE) as Version
+  return isAtLeast(version, min) ? { isOk: true, version: shown } : { isOk: false, problem: 'node-too-old', found: shown }
 }
 
-const PY_LAUNCHER: RuntimeCandidate = {
-  name: 'python3',
-  probe: ['py', '-3', '--version'],
-  argv: root => ['py', '-3', `${root}/sidecar/listener.py`],
+/** The listener's down reason for a failed check: the code, then words with the found and minimum versions. */
+export function nodeReason(check: Extract<NodeCheck, { isOk: false }>): string {
+  if (check.problem === 'node-too-old') return `node-too-old: found Node ${check.found}, need >= ${MIN_NODE}`
+  if (check.found !== null) return `node-missing: \`node --version\` printed "${check.found}", need Node >= ${MIN_NODE}`
+  return `node-missing: no node on PATH, need Node >= ${MIN_NODE}`
 }
 
-/** The runtimes to try, in order, for the `runtime` option on a platform. */
-export function runtimeCandidates(option: RuntimeOption, platform: Platform): RuntimeCandidate[] {
-  const python = platform === 'win32' ? PY_LAUNCHER : PYTHON
-  if (option === 'node') return [NODE]
-  if (option === 'python3') return [python]
-  return [NODE, python]
-}
-
-/** Why no runtime could be used, in words for the status line. */
-export function noRuntimeReason(option: RuntimeOption): string {
-  if (option === 'node') return 'node not found (runtime option is "node")'
-  if (option === 'python3') return 'python3 not found (runtime option is "python3")'
-  return 'neither node nor python3 found'
+/** The sidecar's argv: Node runs the TypeScript listener directly. */
+export function listenerArgv(pluginRoot: string): string[] {
+  return ['node', `${pluginRoot}/sidecar/listener.ts`]
 }
 
 /** The argv that opens `url` in the default browser. */

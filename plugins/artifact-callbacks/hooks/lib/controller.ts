@@ -13,15 +13,16 @@ import type {
 } from '../../types'
 import {
   HEALTHY_MS,
+  NODE_PROBE,
   backoffDelay,
-  noRuntimeReason,
+  checkNode,
+  listenerArgv,
+  nodeReason,
   openCommand,
-  parseRuntime,
   platformFrom,
   randomHex,
-  runtimeCandidates,
+  type NodeCheck,
   type Platform,
-  type RuntimeCandidate,
 } from './host.ts'
 import { LineSplitter, parseLine, type EventLine } from './ndjson.ts'
 import { RUN_ROOT, artifactsDir, join, normalizePage, runDir } from './paths.ts'
@@ -90,7 +91,6 @@ export type Effects = {
 
 export type Config = {
   policy: ConfirmPolicy
-  runtime: ReturnType<typeof parseRuntime>
   port: number
   maxPromptChars: number
   autoStart: boolean
@@ -102,7 +102,6 @@ export type Config = {
 export function configFrom(options: Readonly<Record<string, unknown>>): Config {
   return {
     policy: parsePolicy(options.confirm),
-    runtime: parseRuntime(options.runtime),
     port: toPort(options.port),
     maxPromptChars: toPositive(options.maxPromptChars, DEFAULT_MAX_PROMPT_CHARS),
     autoStart: options.autoStart !== false,
@@ -140,7 +139,7 @@ export const OFF_LISTENER: Listener = {
   pid: null,
   reason: null,
   restarts: 0,
-  runtime: null,
+  nodeVersion: null,
 }
 
 export const USAGE = [
@@ -276,17 +275,15 @@ export function createController(config: Config) {
     return platformFrom(os, uname)
   }
 
-  async function pickRuntime(platform: Platform): Promise<RuntimeCandidate | undefined> {
-    for (const candidate of runtimeCandidates(config.runtime, platform)) {
-      const isThere = await engine()
-        .run([...candidate.probe], { timeoutMs: 10_000 })
-        .then(
-          r => r.exitCode === 0,
-          () => false,
-        )
-      if (isThere) return candidate
-    }
-    return undefined
+  /** Runs `node --version` and judges it against the minimum. */
+  async function probeNode(): Promise<NodeCheck> {
+    const result = await engine()
+      .run([...NODE_PROBE], { timeoutMs: 10_000 })
+      .then(
+        r => r,
+        () => undefined,
+      )
+    return checkNode(result)
   }
 
   async function ensureDirs(s: Session): Promise<void> {
@@ -328,9 +325,9 @@ export function createController(config: Config) {
     const s = session
     if (listener.state !== 'restarting') listener = { ...listener, state: 'starting', reason: null }
     await persist()
-    const runtime = await pickRuntime(s.platform)
-    if (!runtime) {
-      listener = { ...listener, state: 'down', pid: null, reason: noRuntimeReason(config.runtime), runtime: null }
+    const node = await probeNode()
+    if (!node.isOk) {
+      listener = { ...listener, state: 'down', pid: null, reason: nodeReason(node), nodeVersion: node.found }
       await persist()
       return
     }
@@ -356,7 +353,7 @@ export function createController(config: Config) {
       stop = () => resolve('stop')
     })
     const c: Child = {
-      stream: e.spawn({ argv: runtime.argv(e.pluginRoot), env, cwd: s.cwd }),
+      stream: e.spawn({ argv: listenerArgv(e.pluginRoot), env, cwd: s.cwd }),
       port,
       isStopping: false,
       stop,
@@ -367,7 +364,7 @@ export function createController(config: Config) {
       onExit: [],
     }
     child = c
-    listener = { ...listener, runtime: runtime.name }
+    listener = { ...listener, nodeVersion: node.version }
     background(() => runChild(c))
   }
 
@@ -755,7 +752,16 @@ export function createController(config: Config) {
     queue = prior.queue
     session = prior.session ? { ...prior.session, artifactsDir: artifactsDir(prior.session.cwd, config.artifactsDir) } : null
     const was = prior.listener
-    listener = { ...was, pid: null }
+    // Field by field, so a snapshot from an older build (one with `runtime`)
+    // carries nothing the listener type no longer has.
+    listener = {
+      state: was.state,
+      port: was.port,
+      pid: null,
+      reason: was.reason,
+      restarts: was.restarts,
+      nodeVersion: was.nodeVersion ?? null,
+    }
     const now = await e.now()
     for (const r of events) {
       if (r.state === 'running' && r.coalescedInto === null) {

@@ -66,12 +66,16 @@ export type ArtifactCallbacksListener = {
   /** The bound port once ready, else the port it will try to keep. */
   port: number | null
   pid: number | null
-  /** Why it is down or off, in words for the person. */
+  /**
+   * Why it is down or off, in words for the person. A failed Node check
+   * starts with its code: `node-missing: ...` or `node-too-old: ...`,
+   * followed by the found and minimum versions.
+   */
   reason: string | null
   /** Restarts made since the listener was last healthy. */
   restarts: number
-  /** `node` or `python3` once picked. */
-  runtime: string | null
+  /** The Node version `node --version` reported (`v22.18.0`), once checked. */
+  nodeVersion: string | null
 }
 
 /** Per-session facts fixed at start: paths, platform and the cookie secret. */

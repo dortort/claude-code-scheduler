@@ -69,8 +69,11 @@ export class FakeSidecar {
 export type Submitted = { text: string; context: readonly string[] | undefined; origin: unknown; asUser: boolean }
 
 export type KitOptions = {
-  /** Which runtimes answer `--version` with exit code 0. */
-  runtimes?: { node?: boolean; python3?: boolean; py?: boolean }
+  /**
+   * What `node --version` does: print this text (exit 0), exit with a code,
+   * or `null` for no node on PATH (the spawn is refused). Default `v22.18.0`.
+   */
+  node?: string | { exitCode: number; stdout?: string } | null
   /** What `uname -s` prints (and `OS` in the environment). */
   uname?: string
   env?: Record<string, string>
@@ -109,7 +112,7 @@ export function engine(on: On, options: KitOptions = {}) {
   const commands: string[] = []
   const tools: string[] = []
   const randomPorts = [...(options.randomPorts ?? [51234, 51235, 51236, 51237, 51238, 51239])]
-  const runtimes = options.runtimes ?? { node: true, python3: true, py: true }
+  let node = options.node === undefined ? 'v22.18.0' : options.node
   let turnSeq = 0
 
   const parentOf = (path: string): string => path.slice(0, Math.max(1, path.lastIndexOf('/')))
@@ -186,11 +189,9 @@ export function engine(on: On, options: KitOptions = {}) {
       case 'uname':
         return result(0, `${options.uname ?? 'Linux'}\n`)
       case 'node':
-        return runtimes.node ? result(0, 'v22.0.0\n') : { deny: 'spawn node ENOENT' }
-      case 'python3':
-        return runtimes.python3 ? result(0, 'Python 3.12.0\n') : { deny: 'spawn python3 ENOENT' }
-      case 'py':
-        return runtimes.py ? result(0, 'Python 3.12.0\n') : { deny: 'spawn py ENOENT' }
+        if (node === null) return { deny: 'spawn node ENOENT' }
+        if (typeof node === 'string') return result(0, `${node}\n`)
+        return result(node.exitCode, node.stdout ?? '')
       case 'mkdir':
         for (const d of args.filter(a => !a.startsWith('-'))) addDirs(d)
         return result(0)
@@ -302,6 +303,11 @@ export function engine(on: On, options: KitOptions = {}) {
 
     stateOf(id: string): string | undefined {
       return kit.status().events[id]?.state
+    },
+
+    /** Changes what `node --version` does from now on (see KitOptions.node). */
+    setNode(next: KitOptions['node']): void {
+      node = next === undefined ? 'v22.18.0' : next
     },
 
     lastStatus(): string | undefined {
