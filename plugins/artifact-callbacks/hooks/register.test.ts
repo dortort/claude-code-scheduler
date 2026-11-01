@@ -5,6 +5,9 @@
 import { describe, expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import { configFrom, matchesPrompt, toPort, toPositive } from './lib/controller.ts'
+import * as tokenLib from './lib/token.ts'
+
+const import_token = async () => tokenLib
 import {
   ARTIFACTS,
   BAND,
@@ -774,6 +777,33 @@ describe('/callbacks', () => {
     await start($, kit)
     const { text } = await $.command.run({ command: 'callbacks', args: '', ...BY_PERSON })
     expect(text).toContain('Artifact Callbacks is off: remote session')
+  })
+})
+
+describe('file:// token mode', () => {
+  test('the page_token tool hands out the page token and head tags', { options: { allowFileOrigin: true } }, async ($, on) => {
+    const kit = engine(on)
+    await start($, kit)
+    expect(kit.tools).toEqual(['page_token'])
+    expect(await sectionText($)).toContain('call the page_token tool')
+    const secret = kit.sidecar().env.CB_SECRET ?? ''
+    const res = await $.tool.call({ tool: 'mcp__artifact-callbacks__page_token', page: 'triage' } as never)
+    const text = String((res as { result?: unknown }).result)
+    const { pageToken } = await import_token()
+    expect(text).toContain(`<meta name="cb-token" content="${await pageToken(secret, 'triage.html')}">`)
+    expect(text).toContain('<meta name="cb-endpoint" content="http://127.0.0.1:51234">')
+    const bad = await $.tool.call({ tool: 'mcp__artifact-callbacks__page_token', page: '../x' } as never)
+    expect(JSON.stringify(bad)).toContain('page must be a path relative to the artifacts folder')
+    await command($, kit, 'stop')
+    const down = await $.tool.call({ tool: 'mcp__artifact-callbacks__page_token', page: 'triage' } as never)
+    expect(JSON.stringify(down)).toContain('The listener is stopped')
+  })
+
+  test('without allowFileOrigin there is no tool', async ($, on) => {
+    const kit = engine(on)
+    await start($, kit)
+    expect(kit.tools).toEqual([])
+    expect(await sectionText($)).not.toContain('page_token')
   })
 })
 
