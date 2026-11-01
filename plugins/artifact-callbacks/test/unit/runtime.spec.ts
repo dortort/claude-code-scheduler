@@ -5,9 +5,9 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { StdoutLine } from '../../sidecar/lib.ts'
 
@@ -61,6 +61,13 @@ test('`node sidecar/listener.ts` prints a ready line and nothing on stderr', asy
     await exited
     rmSync(base, { recursive: true, force: true })
   }
+})
+
+test('only hooks/ holds *.test.ts(x): `claude plugin test` runs every one in the folder', () => {
+  const stray = readdirSync(PLUGIN_DIR, { recursive: true, encoding: 'utf8' })
+    .filter((p) => !p.split(sep).some((s) => s === 'node_modules' || s.startsWith('.')))
+    .filter((p) => /\.test\.tsx?$/.test(p) && !p.startsWith('hooks' + sep))
+  assert.deepEqual(stray, [], 'name node:test suites *.spec.ts')
 })
 
 test('client.js is a type-checked plain script', () => {
