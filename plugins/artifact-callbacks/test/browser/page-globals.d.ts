@@ -52,4 +52,5 @@ interface Window {
   __done: unknown
   __results: { [name: string]: string }
   __marker: number | undefined
+  __probe: unknown
 }

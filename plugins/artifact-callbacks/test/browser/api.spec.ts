@@ -217,19 +217,22 @@ describe('file:// token mode', () => {
     }
   })
 
-  test('disabled (default): the same page sends nothing and shows rejected', async () => {
+  test('disabled (default): the same page cannot even load the client, and sends nothing', async () => {
     const L = await startListener()
     try {
       const url = filePage(L, 'off.html')
-      const { page: p, ctx } = await open(browser, url)
+      const ctx = await browser.newContext()
       try {
+        const p = await ctx.newPage()
+        await p.goto(url)
+        // A file:// page is cross-site to the listener: without token mode client.js is refused.
+        await L.waitLine((l) => l.type === 'rejected' && l.reason === 'sec-fetch-site' && l.path === '/_cb/client.js')
+        assert.equal(await p.evaluate(() => typeof window.ArtifactCallbacks), 'undefined')
         await p.click('#go')
-        await waitAttr(p, '#go', 'data-cb-state', 'rejected')
-        assert.equal(await attr(p, '#go', 'data-cb-reason'), 'network')
         await sleep(300)
         await L.marker()
         assert.equal(events(L).length, 0)
-        assert.ok(L.lines.some((l) => l.type === 'rejected' && l.reason === 'method' && l.origin === 'null'))
+        assert.equal(await attr(p, '#go', 'data-cb-state'), null)
       } finally {
         await ctx.close()
       }
