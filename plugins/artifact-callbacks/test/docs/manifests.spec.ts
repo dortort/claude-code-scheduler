@@ -2,13 +2,28 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import { statSync } from 'node:fs'
-import { PLUGIN_DIR, REPO_DIR, readJson, read, existsSync, join } from './helpers.mjs'
+import { PLUGIN_DIR, REPO_DIR, readJson, read, existsSync, join, shippedFiles } from './helpers.ts'
+import type { PackageJson, PluginManifest } from './helpers.ts'
+
+interface MarketplaceEntry {
+  name: string
+  description?: string
+  source: string | { source: string, [key: string]: unknown }
+}
+
+interface Marketplace {
+  name: string
+  owner?: { name?: unknown }
+  plugins: MarketplaceEntry[]
+}
+
+const SOURCE_KEYS: Record<string, string[]> = { npm: ['package'], github: ['repo'], url: ['url'], 'git-subdir': ['url', 'path'] }
 
 const NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/
 const SEMVER = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/
 
 describe('marketplace.json', () => {
-  const m = readJson(REPO_DIR, '.claude-plugin', 'marketplace.json')
+  const m = readJson<Marketplace>(REPO_DIR, '.claude-plugin', 'marketplace.json')
 
   test('has a name, an owner and a list of plugins', () => {
     assert.match(m.name, NAME)
@@ -17,7 +32,7 @@ describe('marketplace.json', () => {
   })
 
   test('every entry has a unique kebab-case name, a description and a known source shape', () => {
-    const names = new Set()
+    const names = new Set<string>()
     for (const p of m.plugins) {
       assert.match(p.name, NAME, `name of ${JSON.stringify(p)}`)
       assert.ok(!names.has(p.name), `duplicate entry ${p.name}`)
@@ -28,18 +43,19 @@ describe('marketplace.json', () => {
         assert.ok(!p.source.split('/').includes('..'), `${p.name}: source stays inside the repository`)
       } else {
         assert.equal(typeof p.source, 'object', `${p.name} source`)
-        const kinds = { npm: ['package'], github: ['repo'], url: ['url'], 'git-subdir': ['url', 'path'] }
-        assert.ok(p.source.source in kinds, `${p.name}: unknown source kind ${p.source.source}`)
-        for (const k of kinds[p.source.source]) assert.equal(typeof p.source[k], 'string', `${p.name}: source.${k}`)
+        const src = p.source
+        assert.ok(src.source in SOURCE_KEYS, `${p.name}: unknown source kind ${src.source}`)
+        for (const k of SOURCE_KEYS[src.source]) assert.equal(typeof src[k], 'string', `${p.name}: source.${k}`)
       }
     }
   })
 
   test('every relative source is a plugin folder whose manifest has the same name', () => {
-    for (const p of m.plugins.filter((x) => typeof x.source === 'string')) {
+    for (const p of m.plugins) {
+      if (typeof p.source !== 'string') continue
       const dir = join(REPO_DIR, p.source)
       assert.ok(statSync(dir).isDirectory(), `${p.source} is a folder`)
-      const manifest = readJson(dir, '.claude-plugin', 'plugin.json')
+      const manifest = readJson<PluginManifest>(dir, '.claude-plugin', 'plugin.json')
       assert.equal(manifest.name, p.name, `${p.source} manifest name`)
     }
   })
@@ -53,7 +69,7 @@ describe('marketplace.json', () => {
   test('lists every plugins/artifact-callbacks* folder that has a manifest', () => {
     for (const dir of ['artifact-callbacks', 'artifact-callbacks-channel']) {
       if (!existsSync(join(REPO_DIR, 'plugins', dir, '.claude-plugin', 'plugin.json'))) continue
-      const name = readJson(REPO_DIR, 'plugins', dir, '.claude-plugin', 'plugin.json').name
+      const name = readJson<PluginManifest>(REPO_DIR, 'plugins', dir, '.claude-plugin', 'plugin.json').name
       assert.ok(m.plugins.some((p) => p.name === name && p.source === `./plugins/${dir}`), `${dir} is listed`)
     }
   })
@@ -68,7 +84,7 @@ describe('marketplace.json', () => {
 })
 
 describe('plugin.json', () => {
-  const p = readJson(PLUGIN_DIR, '.claude-plugin', 'plugin.json')
+  const p = readJson<PluginManifest>(PLUGIN_DIR, '.claude-plugin', 'plugin.json')
 
   test('names the plugin, a semver version, a description and the MIT license', () => {
     assert.equal(p.name, 'artifact-callbacks')
@@ -78,18 +94,18 @@ describe('plugin.json', () => {
   })
 
   test('its version matches the dev package.json', () => {
-    assert.equal(p.version, readJson(PLUGIN_DIR, 'package.json').version)
+    assert.equal(p.version, readJson<PackageJson>(PLUGIN_DIR, 'package.json').version)
   })
 
   test('types points at the PluginState declaration', () => {
     assert.equal(typeof p.types, 'string')
-    const file = join(PLUGIN_DIR, p.types)
+    const file = join(PLUGIN_DIR, p.types as string)
     assert.ok(existsSync(file), p.types)
     assert.match(read(file), /interface PluginState\b[\s\S]*'artifact-callbacks'/)
   })
 
   test('hooks.json names hooks modules that exist', () => {
-    const h = readJson(PLUGIN_DIR, 'hooks', 'hooks.json')
+    const h = readJson<{ modules: string[] }>(PLUGIN_DIR, 'hooks', 'hooks.json')
     assert.ok(Array.isArray(h.modules) && h.modules.length > 0)
     for (const mod of h.modules) assert.ok(existsSync(join(PLUGIN_DIR, 'hooks', mod)), mod)
   })
@@ -112,5 +128,51 @@ describe('plugin.json', () => {
 
   test('the plugin ships the interactive-artifacts skill', () => {
     assert.ok(existsSync(join(PLUGIN_DIR, 'skills', 'interactive-artifacts', 'SKILL.md')))
+  })
+
+  test('has no runtime option', () => {
+    assert.ok(!('runtime' in p.userConfig), 'userConfig.runtime')
+  })
+})
+
+describe('shipped files', () => {
+  const files = shippedFiles()
+
+  test('are the plugin sources, not dev tooling', () => {
+    for (const f of ['.claude-plugin/plugin.json', 'README.md', 'hooks/register.tsx', 'sidecar/listener.ts',
+      'sidecar/lib.ts', 'sidecar/client.js', 'skills/interactive-artifacts/SKILL.md']) {
+      assert.ok(files.includes(f), `ships ${f}`)
+    }
+    assert.ok(!files.some((f) => f.startsWith('test/') || f.startsWith('node_modules/') || f === 'package.json'))
+  })
+
+  test('mention Python nowhere and contain no Python or .mjs sources', () => {
+    for (const f of files) {
+      assert.doesNotMatch(f, /\.(py|pyc|mjs|cjs)$/, `${f} is not a Python or .mjs source`)
+      assert.doesNotMatch(read(PLUGIN_DIR, f), /python|py -3|listener\.py\b|listener\.mjs\b/i, `${f} mentions Python or an old listener`)
+    }
+  })
+
+  test('the only JavaScript file is the browser client, and it is type-checked', () => {
+    assert.deepEqual(files.filter((f) => /\.(js|mjs|cjs)$/.test(f)), ['sidecar/client.js'])
+    assert.match(read(PLUGIN_DIR, 'sidecar', 'client.js'), /^(\/\/[^\n]*\n)*\/\/ @ts-check\n/)
+  })
+})
+
+describe('package.json engines', () => {
+  const pkg = readJson<PackageJson>(PLUGIN_DIR, 'package.json')
+
+  test('requires the Node that runs .ts files without flags', () => {
+    assert.equal(pkg.engines?.node, '>=22.18.0')
+  })
+
+  test('matches what the docs and the hooks module say', () => {
+    const min = (pkg.engines?.node ?? '').replace(/^>=/, '')
+    const short = min.replace(/\.0$/, '')
+    assert.ok(read(PLUGIN_DIR, 'hooks', 'lib', 'host.ts').includes(`MIN_NODE = '${min}'`), 'host.ts MIN_NODE')
+    assert.ok(read(PLUGIN_DIR, 'docs', 'SPEC.md').includes(`Node ${short} or later`), 'SPEC.md')
+    assert.ok(read(PLUGIN_DIR, 'docs', 'CONTRACT.md').includes(`"node": ">=${min}"`), 'CONTRACT.md')
+    assert.ok(read(PLUGIN_DIR, 'README.md').includes(`Node.js >= ${short}`), 'README.md')
+    assert.ok(read(PLUGIN_DIR, 'skills', 'interactive-artifacts', 'SKILL.md').includes(`Node.js ${short} or later`), 'SKILL.md')
   })
 })

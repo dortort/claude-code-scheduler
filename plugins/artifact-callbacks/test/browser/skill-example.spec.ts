@@ -5,7 +5,7 @@ import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { launch, startListener, events, settledEvents, open, waitAttr, waitFor } from './helpers.ts'
 import type { Browser, Line, Listener, Page } from './helpers.ts'
-import { PLUGIN_DIR, read, section, codeBlocks } from '../docs/helpers.mjs'
+import { PLUGIN_DIR, read, section, codeBlocks } from '../docs/helpers.ts'
 
 const skill = read(PLUGIN_DIR, 'skills', 'interactive-artifacts', 'SKILL.md')
 const html = codeBlocks(section(skill, 'Complete example')).find((b: { lang: string }) => b.lang === 'html')!.code
