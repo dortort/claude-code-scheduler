@@ -14,9 +14,9 @@ plugins/artifact-callbacks/                 the mod (one plugin folder)
   hooks/lib/*.ts                            pure logic (template render, queue, limits, ids, paths)
   hooks/*.test.ts(x)                        `claude plugin test` suites
   types/index.d.ts                          PluginState contract
-  sidecar/listener.mjs                      Node listener (stdlib only, Node >= 18)
-  sidecar/listener.py                       Python 3.8+ stdlib listener (same contract)
-  sidecar/client.js                         browser helper, served at /_cb/client.js
+  sidecar/listener.ts                       Node listener (stdlib only, Node >= 22.18, TypeScript run directly)
+  sidecar/lib.ts                            pure helpers the listener imports
+  sidecar/client.js                         browser helper (JS + JSDoc, // @ts-check), served at /_cb/client.js
   skills/interactive-artifacts/SKILL.md     authoring guide
   test/                                     node:test suites (unit, conformance, browser e2e)
   test/conformance/                         HTTP conformance suite run against BOTH listeners
@@ -24,8 +24,16 @@ plugins/artifact-callbacks/                 the mod (one plugin folder)
 plugins/artifact-callbacks-channel/         M5 channel adapter plugin (MCP server), own manifest
 ```
 
-Only Node stdlib in `sidecar/*.mjs`, only Python stdlib in `listener.py`, no
-build step for anything the plugin ships. Dev-time test tooling may use the
+Only Node stdlib in `sidecar/*.ts`, no
+build step for anything the plugin ships.
+
+Language: all Node-side code (sidecar, hooks, tests, scripts) is TypeScript using
+only erasable syntax (no `enum`, namespaces, parameter properties; imports carry
+the `.ts` extension; `import type` for types), so `node file.ts` runs it unchanged
+on Node >= 22.18. `package.json` sets `"engines": {"node": ">=22.18.0"}` and may
+carry dev-only `typescript` and `@types/node` for `tsc --noEmit` (with
+`allowImportingTsExtensions`, `erasableSyntaxOnly`, `verbatimModuleSyntax`).
+`client.js` is the one JavaScript file: `// @ts-check` with JSDoc, checked by tsc. Dev-time test tooling may use the
 preinstalled Playwright (`require('playwright')`) and `node:test`.
 
 ## Sidecar process
@@ -227,9 +235,10 @@ token mode carry:
 - Does nothing unless `session.start` reports `isInteractive: true`, and stays off in
   remote/container sessions (detect `CLAUDE_CODE_REMOTE=true` via env exposure in the API,
   if any; otherwise document the limitation). Tests may override with an option.
-- Runtime pick (`runtime` option): `auto` = `node --version` then `python3 --version`
-  (`py -3 --version` on Windows) via `$.process.run`; argv
-  `["node", "<root>/sidecar/listener.mjs"]` or `["python3", "<root>/sidecar/listener.py"]`.
+- Runtime check: `node --version` via `$.process.run`; it must be >= 22.18.0, else the
+  listener stays down with reason `node-missing` or `node-too-old` (found and minimum
+  versions shown by the status line and `/callbacks`). argv
+  `["node", "<root>/sidecar/listener.ts"]`. There is no `runtime` option and no Python.
 - Run dir: a per-session folder outside the artifacts folder (e.g.
   `<cwd>/.claude/.artifact-callbacks/<session id>/`) holding `status.json` and `streams/`.
 - Queue: FIFO depth cap 5, one event in flight (`current`), confirm policy, 5 min
