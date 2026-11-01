@@ -389,11 +389,85 @@ export function decodeEntities (s: string): string {
 
 const WS: ReadonlySet<string | undefined> = new Set([' ', '\t', '\n', '\r', '\f'])
 
+/** Elements whose content the HTML tokenizer reads as text, never as tags. */
+const RAW_TEXT_ELEMENTS: ReadonlySet<string> = new Set([
+  'script', 'style', 'xmp', 'iframe', 'noembed', 'noframes', 'noscript', // raw text
+  'textarea', 'title' // escapable raw text (RCDATA)
+])
+
+function isTagEnd (c: string | undefined): boolean {
+  return c === undefined || WS.has(c) || c === '/' || c === '>'
+}
+
+/** True when `s` has `</name` + whitespace, `/`, `>` or the end at `i` (name ASCII case-insensitive). */
+function endTagAt (s: string, i: number, name: string): boolean {
+  return s.startsWith('</', i) &&
+    s.slice(i + 2, i + 2 + name.length).toLowerCase() === name &&
+    isTagEnd(s[i + 2 + name.length])
+}
+
+/**
+ * Index of the `</name` that ends the raw-text or RCDATA element whose content
+ * starts at `i`, or `s.length` when it never ends (the rest is text).
+ */
+function skipRawText (s: string, i: number, name: string): number {
+  if (name === 'script') return skipScriptData(s, i)
+  for (let at = s.indexOf('</', i); at >= 0; at = s.indexOf('</', at + 2)) {
+    if (endTagAt(s, at, name)) return at
+  }
+  return s.length
+}
+
+/**
+ * Index of the `</script` that ends script data starting at `i`, following the
+ * HTML tokenizer's script data, escaped (`<!--`) and double-escaped
+ * (`<!--<script>`) states, so a `</script>` the browser reads as text does not
+ * end the skip early. `s.length` when the script never ends.
+ */
+function skipScriptData (s: string, i: number): number {
+  const n = s.length
+  let state: 'data' | 'escaped' | 'double' = 'data'
+  while (i < n) {
+    if (state === 'data') {
+      if (endTagAt(s, i, 'script')) return i
+      if (s.startsWith('<!--', i)) {
+        // escape start: "--" may be followed by more dashes, and ">" leaves at once
+        i += 4
+        while (s[i] === '-') i++
+        if (s[i] === '>') { i++; continue }
+        state = 'escaped'
+        continue
+      }
+      i++
+    } else {
+      if (s.startsWith('-->', i)) { state = 'data'; i += 3; continue }
+      if (s[i] === '-') { i++; continue }
+      if (state === 'escaped') {
+        if (endTagAt(s, i, 'script')) return i
+        if (s[i] === '<' && s.slice(i + 1, i + 7).toLowerCase() === 'script' && isTagEnd(s[i + 7]) && s[i + 7] !== undefined) {
+          state = 'double'
+          i += 7
+          continue
+        }
+      } else if (endTagAt(s, i, 'script') && s[i + 8] !== undefined) {
+        state = 'escaped'
+        i += 8
+        continue
+      }
+      i++
+    }
+  }
+  return n
+}
+
 /**
  * Collect every value of attribute `attr` (ASCII case-insensitive name) in the
  * start tags of `html`. Values may be double-quoted, single-quoted or unquoted;
  * entities are decoded with decodeEntities. Comments, `<!...>` and `<?...>`
- * are skipped; a bare attribute (no `=`) yields the empty string.
+ * are skipped; a bare attribute (no `=`) yields the empty string. The content
+ * of raw-text and RCDATA elements (`script`, `style`, `textarea`, `title`,
+ * `xmp`, `iframe`, `noembed`, `noframes`, `noscript`) and everything after
+ * `<plaintext>` is text to a browser, so markup in it is not read as tags.
  */
 export function extractAttributeValues (html: string, attr: string): string[] {
   const want = attr.toLowerCase()
@@ -418,12 +492,19 @@ export function extractAttributeValues (html: string, attr: string): string[] {
     }
     if (!c || !/[A-Za-z]/.test(c)) continue
     // tag name
+    const tagStart = i
     while (i < n && !WS.has(s[i]) && s[i] !== '>' && s[i] !== '/') i++
+    const tag = s.slice(tagStart, i).toLowerCase()
     // attributes
     for (;;) {
       while (i < n && (WS.has(s[i]) || s[i] === '/')) i++
       if (i >= n) break
-      if (s[i] === '>') { i++; break }
+      if (s[i] === '>') {
+        i++
+        if (tag === 'plaintext') i = n
+        else if (RAW_TEXT_ELEMENTS.has(tag)) i = skipRawText(s, i, tag)
+        break
+      }
       const nameStart = i
       i++ // the first char may be '=' per HTML tokenizer rules
       while (i < n && !WS.has(s[i]) && s[i] !== '/' && s[i] !== '>' && s[i] !== '=') i++
