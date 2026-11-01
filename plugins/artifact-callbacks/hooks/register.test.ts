@@ -873,6 +873,35 @@ describe('reply streaming', () => {
     expect(kit.writes.some(w => w.path === file)).toBe(false)
   })
 
+  test('the stream file ends before status.json says done, so the listener never closes a stream early', { options: { confirm: 'never', streamReplies: true } }, async ($, on) => {
+    const kit = engine(on)
+    on('turn.step', async function* (_$, e) {
+      yield { kind: 'text' as const, index: 0, text: 'last words' }
+      return { turnId: e.turnId, index: e.index, answer: 'last words', toolUses: [], stopReason: 'end_turn' as const, usage: null }
+    })
+    await start($, kit)
+    const line = eventLine()
+    kit.sidecar().emit(line)
+    await kit.settle()
+    const turnId = kit.nextTurnId()
+    await $.turn.start({ text: kit.submitted[0]?.text ?? '', turnId })
+    await kit.settle()
+    for await (const _ of $.turn.step({ turnId, index: 0, model: 'claude', messageCount: 1 })) void _
+    // Complete before the 250 ms flush timer: the pending text must still precede done.
+    await $.turn.complete({ answer: 'last words', durationMs: 1, isAborted: false, turnId, reason: 'answer' })
+    await kit.settle()
+    const file = `${RUN}/streams/${line.id}.ndjson`
+    const streamEnd = kit.writes.findIndex(w => w.path === `${file}.tmp` && w.text.endsWith('{"type":"end"}\n'))
+    const statusDone = kit.writes.findIndex(
+      w => w.path === `${STATUS}.tmp` && (JSON.parse(w.text) as { events: Record<string, { state: string }> }).events[line.id]?.state === 'done',
+    )
+    expect(streamEnd).toBeGreaterThan(-1)
+    expect(statusDone).toBeGreaterThan(streamEnd)
+    expect(kit.files.get(file)).toBe(
+      '{"type":"state","state":"running"}\n{"type":"text","text":"last words"}\n{"type":"state","state":"done"}\n{"type":"end"}\n',
+    )
+  })
+
   test('without streamReplies nothing is streamed', NEVER, async ($, on) => {
     const kit = engine(on)
     await start($, kit)
