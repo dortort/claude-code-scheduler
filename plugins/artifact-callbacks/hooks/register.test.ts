@@ -448,6 +448,18 @@ describe('session injection', () => {
     expect(kit.logs.some(l => l.includes('diagnostic'))).toBe(true)
   })
 
+  // Found in the real-session E2E: a click dropped while paused showed as "triage.html → ?".
+  test('/callbacks names the control a listener-side drop came from', NEVER, async ($, on) => {
+    const kit = engine(on)
+    await start($, kit)
+    kit.sidecar().emit({ type: 'dropped', id: 'ev_bbbbbbbbbb', reason: 'paused', servedPage: 'triage.html', action: 'skip', label: 'Skip test_b' })
+    kit.sidecar().emit({ type: 'dropped', id: 'ev_cccccccccc', reason: 'rate-limit', servedPage: 'triage.html' })
+    await kit.settle()
+    const text = await command($, kit, '')
+    expect(text).toContain('ev_bbbbbbbbbb  triage.html → skip  dropped (paused)')
+    expect(text).toContain('ev_cccccccccc  triage.html → ?  dropped (rate-limit)')
+  })
+
   test('a line split across pieces is read whole', NEVER, async ($, on) => {
     const kit = engine(on)
     await start($, kit)

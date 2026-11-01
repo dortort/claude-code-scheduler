@@ -67,7 +67,15 @@ export interface EventLine {
   body: ReportedEventBody
 }
 export interface RejectedLine { type: 'rejected'; reason: RejectReason; path: string; origin?: string }
-export interface DroppedLine { type: 'dropped'; id: string; reason: DropReason; servedPage: string }
+export interface DroppedLine {
+  type: 'dropped'
+  id: string
+  reason: DropReason
+  servedPage: string
+  /** The dropped event's action and label, so the mod can say which control it was. */
+  action: string
+  label?: string
+}
 export interface ErrorLine { type: 'error'; reason: ErrorReason; message: string }
 
 /** One NDJSON line the listener writes on stdout. */

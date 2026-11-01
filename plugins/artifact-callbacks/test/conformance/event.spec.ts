@@ -374,7 +374,7 @@ describe('j. admission', () => {
     try {
       await L.serve('p.html', PAGE)
       L.writeStatus({ paused: true })
-      const r = await L.post({ v: 1, action: 'x' })
+      const r = await L.post({ v: 1, action: 'x', label: 'Do X' })
       assert.equal(r.status, 429)
       assertBaseHeaders(assert, r)
       assert.deepEqual(Object.keys(r.json).sort(), ['id', 'reason', 'state'])
@@ -382,7 +382,8 @@ describe('j. admission', () => {
       assert.equal(r.json.state, 'dropped')
       assert.equal(r.json.reason, 'paused')
       const evs = await newEvents(L)
-      assert.deepEqual(evs, [{ type: 'dropped', id: r.json.id, reason: 'paused', servedPage: 'p.html' }])
+      // The line names the control (action, label) so the mod can say which click it dropped.
+      assert.deepEqual(evs, [{ type: 'dropped', id: r.json.id, reason: 'paused', servedPage: 'p.html', action: 'x', label: 'Do X' }])
       const g = await L.getEvent(r.json.id)
       assert.equal(g.status, 200)
       assert.equal(g.json.state, 'dropped')
@@ -438,6 +439,8 @@ describe('j. admission', () => {
       assert.equal(dropped.length, 1)
       assert.equal(dropped[0].reason, 'rate-limit')
       assert.equal(dropped[0].servedPage, 'p.html')
+      assert.equal(dropped[0].action, 'x')
+      assert.equal('label' in dropped[0], false)
     } finally {
       await L.cleanup()
     }

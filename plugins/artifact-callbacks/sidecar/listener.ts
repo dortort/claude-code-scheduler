@@ -347,7 +347,7 @@ function start (cfg: CheckedConfig): void {
     if (value.idempotencyKey !== undefined) idem.set(value.idempotencyKey, id, now)
     if (reason) {
       remember(id, { state: 'dropped', page, reason })
-      emit({ type: 'dropped', id, reason, servedPage: page })
+      emit({ type: 'dropped', id, reason, servedPage: page, action: value.action, ...(value.label !== undefined ? { label: value.label } : {}) })
       return json(res, 429, { id, state: 'dropped', reason })
     }
     rate.record(page, now)

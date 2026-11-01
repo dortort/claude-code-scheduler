@@ -447,8 +447,8 @@ export function createController(config: Config) {
           newRecord({
             id: line.id,
             page: line.servedPage ?? '?',
-            action: '?',
-            label: null,
+            action: line.action ?? '?',
+            label: line.label ?? null,
             receivedAt: await engine().now(),
             dataKey: '{}',
             state: 'dropped',
