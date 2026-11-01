@@ -1,0 +1,142 @@
+name: Artifact Callbacks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'plugins/artifact-callbacks*/**'
+      - '.claude-plugin/marketplace.json'
+      - 'README.md'
+      - '.github/workflows/artifact-callbacks.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'plugins/artifact-callbacks*/**'
+      - '.claude-plugin/marketplace.json'
+      - 'README.md'
+      - '.github/workflows/artifact-callbacks.yml'
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: plugins/artifact-callbacks
+    shell: bash
+
+permissions:
+  contents: read
+
+concurrency:
+  group: artifact-callbacks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node:
+    name: Node tests (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [18, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Unit tests
+        run: npm run test:unit
+      - name: Conformance (Node listener)
+        run: npm run test:conformance
+
+  python:
+    name: Python conformance (${{ matrix.os }}, Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ['3.8', '3.12']
+        exclude:
+          # No Python 3.8 build for the Apple silicon runners.
+          - os: macos-latest
+            python-version: '3.8'
+    env:
+      # setup-python puts `python` on PATH on every OS (`python3` is missing on Windows).
+      CB_LISTENER_CMD: python sidecar/listener.py
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Python version
+        run: python --version
+      - name: Conformance (Python listener)
+        run: node --test test/conformance/*.test.mjs
+
+  browser:
+    name: Browser tests (Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright
+        # Dev-time only: the plugin ships no node_modules, so nothing is saved to package.json.
+        run: npm install --no-save --no-package-lock playwright@1.63.0
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Browser tests
+        run: npm run test:browser
+
+  plugin:
+    name: Claude plugin validate and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+      - name: Validate the marketplace
+        run: claude plugin validate .
+      - name: Validate the plugins
+        run: |
+          for dir in plugins/artifact-callbacks*/; do
+            if [ -f "$dir.claude-plugin/plugin.json" ]; then
+              echo "::group::claude plugin validate $dir"
+              claude plugin validate "$dir"
+              echo "::endgroup::"
+            fi
+          done
+      - name: Hooks module tests
+        run: |
+          for dir in plugins/artifact-callbacks*/; do
+            if compgen -G "$dir"'hooks/*.test.ts*' > /dev/null; then
+              echo "::group::claude plugin test $dir"
+              claude plugin test "$dir"
+              echo "::endgroup::"
+            fi
+          done
+
+  docs:
+    name: Docs tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: README, SKILL.md and manifest checks
+        run: npm run test:docs
