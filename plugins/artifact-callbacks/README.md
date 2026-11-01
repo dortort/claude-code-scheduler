@@ -22,9 +22,16 @@ Or, at the prompt of a terminal session:
 /plugin install artifact-callbacks --marketplace dortort/claude-plugins
 ```
 
-Requirements: Claude Code with mods (hooks modules), and either Node.js >= 18 or
-Python >= 3.8 on `PATH` for the listener. Nothing else to configure: the next
-interactive session starts the listener and tells Claude how to wire a page.
+Requirements: Claude Code with mods (hooks modules), and Node.js >= 22.18 on `PATH` for
+the listener. Node 22.18 and later run the listener's TypeScript source directly, so
+there is nothing to build or install and no other runtime to choose. Nothing else to
+configure: the next interactive session starts the listener and tells Claude how to wire
+a page.
+
+If `node` is missing or older than 22.18, the listener stays down: `/callbacks` and the
+status line say why (`node-missing` or `node-too-old`, with the version found) and
+Claude gets no callbacks section, so it writes static pages. Install a newer Node, then
+run `/callbacks start`.
 
 ## How it works
 
@@ -34,9 +41,9 @@ browser page ──HTTP (loopback)──▶ sidecar listener ──NDJSON stdout
      └──────── polls /_cb/events/<id> ──┘
 ```
 
-1. **Session start.** The hooks module (`hooks/register.tsx`) spawns the sidecar
-   (`sidecar/listener.mjs`, or `sidecar/listener.py` when Node is missing) on
-   `127.0.0.1` and adds a short system-prompt section naming the port.
+1. **Session start.** The hooks module (`hooks/register.tsx`) checks `node --version`, spawns the
+   sidecar (`node sidecar/listener.ts`) on `127.0.0.1` and adds a short system-prompt
+   section naming the port.
 2. **Claude writes a page** under `.claude/artifacts/`, loads `/_cb/client.js`, and marks
    controls with `data-cb-action` (the bundled `interactive-artifacts` skill is its
    authoring guide). It gives you `http://127.0.0.1:<port>/a/<file>`.
@@ -63,7 +70,6 @@ Set them in the plugin's options in the config menu (`userConfig` in
 | `confirm` | `first-per-page` / `always` / `never` | `first-per-page` | `first-per-page`: the first event from each page waits for *Run* in a band above the prompt, and *Run* trusts that page for the session. `always`: every event waits. `never`: events run straight away. Unanswered events expire after 5 minutes. |
 | `artifactsDir` | path | `.claude/artifacts` | Folder served under `/a/`, relative to the session's working directory. |
 | `allowFileOrigin` | boolean | `false` | Token mode for pages opened straight from disk (`file://`): a per-page token in a `<meta name="cb-token">` tag replaces the cookie; Claude gets the tags from the mod's `page_token` tool, registered only in this mode. Off by default because the token sits in the file and the transcript. |
-| `runtime` | `auto` / `node` / `python3` | `auto` | Listener runtime. `auto` tries `node --version`, then `python3 --version` (`py -3` on Windows). |
 | `maxPromptChars` | number | `4000` | Cap on the rendered prompt of one event, in characters. |
 | `autoStart` | boolean | `true` | Start the listener with the session. When off, run `/callbacks start`. |
 | `streamReplies` | boolean | `false` | Write Claude's reply text for each event where the page can stream it from `/_cb/events/<id>/stream` (`ev.on('text', …)` in the page). |
@@ -145,8 +151,8 @@ main residual risk: the confirm band, on-disk template matching and the skill's 
   they are not supported.
 - **One-way.** Claude's reply is not streamed into the page unless `streamReplies` is on;
   pages poll for state and reload when Claude rewrites them.
-- **Windows.** `/callbacks open` uses `cmd /c start ""`; the `auto` runtime looks for
-  `node`, then `python3`, then `py -3`. Whether every browser on Windows (Edge in
+- **Windows.** `/callbacks open` uses `cmd /c start ""`, and the listener runs as
+  `node <plugin>/sidecar/listener.ts` like everywhere else. Whether every browser on Windows (Edge in
   particular) applies `SameSite=Strict` to `127.0.0.1` exactly as on other platforms is
   still an open question; if clicks are rejected as forbidden, reopen the page from
   `http://localhost:<port>/a/<file>`.
@@ -154,17 +160,24 @@ main residual risk: the confirm band, on-disk template matching and the skill's 
 
 ## Development
 
-Tests need Node.js >= 22.18, which runs the TypeScript sources directly. `npm install`
-brings the dev-only `typescript` and `@types/node` for `npm run typecheck`; the suites
-themselves need nothing from npm, except the browser suite, which needs the
-`playwright` package and its Chromium (`npm install --no-save playwright` and
-`npx playwright install chromium` once, unless both are already installed). The
-`validate` and `test:hooks` scripts need the `claude` CLI on `PATH`.
+Everything Node-side (hooks module, sidecar, tests) is TypeScript with erasable syntax
+only, run directly by Node.js >= 22.18: there is no build step and nothing compiled is
+shipped. `sidecar/client.js` is the one JavaScript file, because browsers cannot run
+TypeScript; it is type-checked through `// @ts-check` and JSDoc. Node test files are
+named `*.spec.ts`, because `claude plugin test` treats every `*.test.ts` as a hooks
+suite.
+
+`npm ci` installs the dev-only `typescript` and `@types/node` from the lockfile for
+`npm run typecheck`; the suites themselves need nothing from npm, except the browser
+suite, which needs the `playwright` package and its Chromium (`npm install --no-save
+playwright` and `npx playwright install chromium` once, unless both are already
+installed). The `validate` and `test:hooks` scripts need the `claude` CLI on `PATH`.
 
 ```bash
 cd plugins/artifact-callbacks
+npm ci                           # dev-only typescript and @types/node
 npm test                         # unit, conformance, browser and docs suites
-npm run typecheck                # tsc --noEmit over sidecar/*.ts, client.js (// @ts-check) and the tests
+npm run typecheck                # tsc --noEmit: sidecar, client.js (// @ts-check), tests, and the hooks module
 npm run test:unit
 npm run test:conformance         # HTTP conformance suite against sidecar/listener.ts
 npm run test:browser             # Chromium end-to-end tests of sidecar/client.js

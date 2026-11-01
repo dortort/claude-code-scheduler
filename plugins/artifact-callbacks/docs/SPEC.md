@@ -41,7 +41,7 @@ The mod is a hooks module plus a small sidecar process, because a hooks module h
 
 &#91;embedded content: Artifact Callbacks · components and data flow\]
 
-**Language and runtime.** Everything that runs in Node is TypeScript: the hooks module, the sidecar and the tests. The sidecar needs Node 22.18 or later, which runs `.ts` files directly (erasable syntax only), so nothing is compiled or built. `client.js` stays JavaScript because browsers cannot run TypeScript; it is type-checked with `tsc --checkJs`. There is no Python fallback: one listener keeps the security-critical checks in one implementation.
+**Language and runtime.** Everything that runs in Node is TypeScript: the hooks module, the sidecar and the tests. The sidecar needs Node 22.18 or later, which runs `.ts` files directly (erasable syntax only), so nothing is compiled or built. `client.js` stays JavaScript because browsers cannot run TypeScript; it is type-checked by `tsc` through `// @ts-check` and JSDoc. There is no fallback listener in another language: one listener keeps the security-critical checks in one implementation.
 
 The browser only ever talks to the sidecar. The sidecar never touches the session; it reports events on stdout and reads state the mod writes.
 
