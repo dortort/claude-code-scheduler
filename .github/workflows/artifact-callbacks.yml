@@ -30,52 +30,43 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  node:
-    name: Node tests (Node ${{ matrix.node-version }})
+  typecheck:
+    name: Typecheck (node sources and hooks module)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.18.0'
+      - name: Install dev dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+
+  node:
+    name: Node tests (${{ matrix.os }}, Node ${{ matrix.node-version }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        node-version: [18, 22]
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node-version: ['22.18.0', '24']
     steps:
+      - name: Keep LF line endings on Windows
+        working-directory: .
+        run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
+      - name: Node version
+        run: node --version
       - name: Unit tests
         run: npm run test:unit
-      - name: Conformance (Node listener)
+      - name: Conformance
         run: npm run test:conformance
-
-  python:
-    name: Python conformance (${{ matrix.os }}, Python ${{ matrix.python-version }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ['3.8', '3.12']
-        exclude:
-          # No Python 3.8 build for the Apple silicon runners.
-          - os: macos-latest
-            python-version: '3.8'
-    env:
-      # setup-python puts `python` on PATH on every OS (`python3` is missing on Windows).
-      CB_LISTENER_CMD: python sidecar/listener.py
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Python version
-        run: python --version
-      - name: Conformance (Python listener)
-        run: node --test test/conformance/*.test.mjs
 
   browser:
     name: Browser tests (Chromium)
@@ -85,7 +76,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '22.18.0'
       - name: Install Playwright
         # Dev-time only: the plugin ships no node_modules, so nothing is saved to package.json.
         run: npm install --no-save --no-package-lock playwright@1.63.0
@@ -105,7 +96,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '22.18.0'
       - name: Install Claude Code
         run: npm install -g @anthropic-ai/claude-code
       - name: Validate the marketplace
@@ -137,6 +128,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
-      - name: README, SKILL.md and manifest checks
+          node-version: '22.18.0'
+      - name: README, SKILL.md, manifest and CI checks
         run: npm run test:docs

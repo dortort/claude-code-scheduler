@@ -27,6 +27,8 @@ test('`node sidecar/listener.ts` prints a ready line and nothing on stderr', asy
   // Only what a session passes: no NODE_OPTIONS or other flags from this test runner.
   const env: NodeJS.ProcessEnv = {
     PATH: process.env.PATH,
+    // Windows needs SystemRoot to open sockets at all; it is set in every real session.
+    ...(process.platform === 'win32' ? { SystemRoot: process.env.SystemRoot } : {}),
     CB_PORT: '0',
     CB_ROOT: root,
     CB_STATUS_FILE: join(base, 'status.json'),
