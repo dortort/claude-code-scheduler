@@ -21,8 +21,10 @@ import {
   openCommand,
   platformFrom,
   randomHex,
+  remoteReason,
   type NodeCheck,
   type Platform,
+  type RemoteKind,
 } from './host.ts'
 import { LineSplitter, parseLine, type EventLine } from './ndjson.ts'
 import { RUN_ROOT, artifactsDir, join, normalizePage, runDir } from './paths.ts'
@@ -927,11 +929,11 @@ export function createController(config: Config) {
     config,
 
     /** session.start of an interactive session: a new session or a reload. */
-    async start(effects: Effects, cwd: string, isRemote: boolean): Promise<void> {
+    async start(effects: Effects, cwd: string, remote: RemoteKind | undefined): Promise<void> {
       fx = effects
-      if (isRemote) {
+      if (remote !== undefined) {
         isActive = false
-        listener = { ...OFF_LISTENER, reason: "remote session: this machine's loopback is not your browser's" }
+        listener = { ...OFF_LISTENER, reason: remoteReason(remote) }
         effects.status(undefined)
         return
       }

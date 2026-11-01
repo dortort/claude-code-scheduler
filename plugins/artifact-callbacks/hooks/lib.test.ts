@@ -15,6 +15,8 @@ import {
   parseNodeVersion,
   platformFrom,
   randomHex,
+  remoteKind,
+  remoteReason,
 } from './lib/host.ts'
 import { LineSplitter, parseLine } from './lib/ndjson.ts'
 import { artifactsDir, isAbsolute, join, normalizePage, runDir, safeSegment } from './lib/paths.ts'
@@ -327,6 +329,18 @@ describe('paths', () => {
 })
 
 describe('host', () => {
+  test('remote detection: cloud sessions and SSH logins', () => {
+    expect(remoteKind({})).toBeUndefined()
+    expect(remoteKind({ CLAUDE_CODE_REMOTE: 'false', SSH_CONNECTION: '', SSH_CLIENT: undefined })).toBeUndefined()
+    expect(remoteKind({ CLAUDE_CODE_REMOTE: 'true' })).toBe('remote')
+    expect(remoteKind({ CLAUDE_CODE_REMOTE: 'true', SSH_TTY: '/dev/pts/0' })).toBe('remote')
+    expect(remoteKind({ SSH_CONNECTION: '10.0.0.2 51022 10.0.0.1 22' })).toBe('ssh')
+    expect(remoteKind({ SSH_CLIENT: '10.0.0.2 51022 22' })).toBe('ssh')
+    expect(remoteKind({ SSH_TTY: '/dev/pts/3' })).toBe('ssh')
+    expect(remoteReason('ssh')).toContain('SSH session')
+    expect(remoteReason('remote')).toContain('remote session')
+  })
+
   test('platform detection', () => {
     expect(platformFrom('Windows_NT', undefined)).toBe('win32')
     expect(platformFrom(undefined, 'Darwin\n')).toBe('darwin')

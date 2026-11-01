@@ -154,6 +154,20 @@ describe('session start', () => {
     expect(await sectionIds($)).toEqual(['intro'])
   })
 
+  for (const [name, value] of [['SSH_CONNECTION', '10.0.0.2 51022 10.0.0.1 22'], ['SSH_CLIENT', '10.0.0.2 51022 22'], ['SSH_TTY', '/dev/pts/3']]) {
+    test(`an SSH session (${name}) stays off and says why`, async ($, on) => {
+      const kit = engine(on, { env: { [name as string]: value as string } })
+      on('command.run', () => ({ text: 'unregistered' }))
+      await start($, kit)
+      expect(kit.sidecars).toHaveLength(0)
+      expect(kit.commands).toEqual([])
+      expect(kit.lastStatus()).toBeUndefined()
+      expect(await sectionIds($)).toEqual(['intro'])
+      const { text } = await $.command.run({ command: 'callbacks', args: '', ...BY_PERSON })
+      expect(text).toContain('Artifact Callbacks is off: SSH session')
+    })
+  }
+
   test('autoStart off waits for /callbacks start', { options: { autoStart: false } }, async ($, on) => {
     const kit = engine(on)
     await start($, kit)

@@ -28,8 +28,9 @@ const STEP_MS = 180_000
 // Variables a host session (a cloud container, or a Claude Code session running
 // this suite) exports to its children. Left in place they would make the nested
 // session believe it is that host: CLAUDE_CODE_REMOTE=true turns the mod off by
-// design (a remote machine's loopback is not the user's browser), and the
-// session id would make it write into the host's transcript.
+// design (a remote machine's loopback is not the user's browser), as do the
+// SSH_* variables of a suite started over SSH (its browser runs on this machine),
+// and the session id would make it write into the host's transcript.
 const HOST_VARS = [
   'CLAUDE_CODE_REMOTE',
   'CLAUDECODE',
@@ -37,6 +38,9 @@ const HOST_VARS = [
   'CLAUDE_CODE_ENTRYPOINT',
   'CLAUDE_CODE_CHILD_SESSION',
   'CLAUDE_AUTO_BACKGROUND_TASKS',
+  'SSH_CONNECTION',
+  'SSH_CLIENT',
+  'SSH_TTY',
 ]
 
 function sessionEnv (): NodeJS.ProcessEnv {

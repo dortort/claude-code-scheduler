@@ -92,6 +92,28 @@ describe('README options', () => {
   })
 })
 
+describe('remote session detection', () => {
+  const host = read(PLUGIN_DIR, 'hooks', 'lib', 'host.ts')
+  const fn = host.slice(host.indexOf('export function remoteKind'))
+  const vars = [...new Set([...fn.slice(0, fn.indexOf('\n}\n')).matchAll(/\b(CLAUDE_CODE_REMOTE|SSH_[A-Z]+)\b/g)].map((m) => m[1]))]
+  const register = read(PLUGIN_DIR, 'hooks', 'register.tsx')
+  const contract = read(PLUGIN_DIR, 'docs', 'CONTRACT.md')
+
+  test('the hooks module checks cloud sessions and SSH logins', () => {
+    assert.deepEqual(vars.sort(), ['CLAUDE_CODE_REMOTE', 'SSH_CLIENT', 'SSH_CONNECTION', 'SSH_TTY'])
+    for (const name of vars) assert.ok(register.includes(`$.env.get('${name}')`), `register.tsx reads ${name}`)
+  })
+
+  test('README, SPEC and CONTRACT name every variable that turns the mod off', () => {
+    for (const name of vars) {
+      const named = new RegExp('`' + name + '[`=]')
+      assert.match(section(readme, 'Limitations'), named, `README Limitations names ${name}`)
+      assert.match(spec, named, `SPEC names ${name}`)
+      assert.match(contract, named, `CONTRACT names ${name}`)
+    }
+  })
+})
+
 describe('README Node requirement', () => {
   test('the requirements name the engines minimum and nothing older', () => {
     const v = minNode()

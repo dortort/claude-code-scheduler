@@ -258,8 +258,10 @@ token mode carry:
 ## Mod-side rules (hooks/register.tsx)
 
 - Does nothing unless `session.start` reports `isInteractive: true`, and stays off in
-  remote/container sessions (detect `CLAUDE_CODE_REMOTE=true` via env exposure in the API,
-  if any; otherwise document the limitation). Tests may override with an option.
+  remote/container sessions: `CLAUDE_CODE_REMOTE=true`, or an SSH login (`SSH_CONNECTION`,
+  `SSH_CLIENT` or `SSH_TTY` set and not empty), read with `$.env.get`. The listener is then
+  `off` with the reason `remote session: …` or `SSH session: …`, no tool or command is
+  registered and no compose section is added.
 - Runtime check: `node --version` via `$.process.run`; it must be >= 22.18.0, else the
   listener stays down with reason `node-missing` or `node-too-old` (found and minimum
   versions shown by the status line and `/callbacks`). argv

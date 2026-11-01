@@ -329,7 +329,7 @@ artifact-callbacks/
 | Two sessions in the same project | Each has its own port and cookie; a tab only reaches the session that served it |
 | Page edited by Claude while open | `data-cb-prompt` templates are re-read from disk per event, so a stale tab's old template is rejected (`409 template-changed`) and the page asks the user to reload |
 | Headless (`claude -p`) or SDK host | `session.start` reports `isInteractive: false`; the mod does nothing |
-| Remote or container session (claude.ai cloud, SSH) | Loopback is the remote machine's, not the browser's; v1 detects no surface on the user's machine and stays off. See open questions |
+| Remote or container session (claude.ai cloud, SSH) | Loopback is the remote machine's, not the browser's; v1 detects no surface on the user's machine and stays off: `CLAUDE_CODE_REMOTE=true` (cloud) or any of `SSH_CONNECTION`, `SSH_CLIENT`, `SSH_TTY` set (SSH). See open questions |
 
 **Open questions**
 
