@@ -62,7 +62,7 @@ Set them in the plugin's options in the config menu (`userConfig` in
 | `port` | number | `0` | Fixed loopback port for the listener; `0` picks a random free port each session. Still loopback only. |
 | `confirm` | `first-per-page` / `always` / `never` | `first-per-page` | `first-per-page`: the first event from each page waits for *Run* in a band above the prompt, and *Run* trusts that page for the session. `always`: every event waits. `never`: events run straight away. Unanswered events expire after 5 minutes. |
 | `artifactsDir` | path | `.claude/artifacts` | Folder served under `/a/`, relative to the session's working directory. |
-| `allowFileOrigin` | boolean | `false` | Token mode for pages opened straight from disk (`file://`): a per-page token in a `<meta name="cb-token">` tag replaces the cookie. Off by default because the token sits in the file and the transcript. |
+| `allowFileOrigin` | boolean | `false` | Token mode for pages opened straight from disk (`file://`): a per-page token in a `<meta name="cb-token">` tag replaces the cookie; Claude gets the tags from the mod's `page_token` tool, registered only in this mode. Off by default because the token sits in the file and the transcript. |
 | `runtime` | `auto` / `node` / `python3` | `auto` | Listener runtime. `auto` tries `node --version`, then `python3 --version` (`py -3` on Windows). |
 | `maxPromptChars` | number | `4000` | Cap on the rendered prompt of one event, in characters. |
 | `autoStart` | boolean | `true` | Start the listener with the session. When off, run `/callbacks start`. |
