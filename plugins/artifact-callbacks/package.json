@@ -13,7 +13,9 @@
     "test:conformance": "node --test test/conformance/*.test.mjs",
     "test:conformance:python": "CB_LISTENER_CMD=\"python3 sidecar/listener.py\" node --test test/conformance/*.test.mjs",
     "test:browser": "node --test test/browser/*.test.mjs",
-    "test:docs": "node --test test/docs/*.test.mjs"
+    "test:docs": "node --test test/docs/*.test.mjs",
+    "test:hooks": "claude plugin test .",
+    "validate": "claude plugin validate ."
   },
   "license": "MIT"
 }
