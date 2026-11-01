@@ -5,17 +5,21 @@
   "description": "Dev scripts for the Artifact Callbacks mod (the plugin itself ships no node_modules)",
   "type": "module",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.18.0"
   },
   "scripts": {
     "test": "npm run test:unit && npm run test:conformance && npm run test:browser && npm run test:docs",
-    "test:unit": "node --test test/unit/*.test.mjs",
-    "test:conformance": "node --test test/conformance/*.test.mjs",
-    "test:conformance:python": "CB_LISTENER_CMD=\"python3 sidecar/listener.py\" node --test test/conformance/*.test.mjs",
-    "test:browser": "node --test test/browser/*.test.mjs",
-    "test:docs": "node --test test/docs/*.test.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json",
+    "test:unit": "node --test \"test/unit/*.test.ts\"",
+    "test:conformance": "node --test \"test/conformance/*.test.ts\"",
+    "test:browser": "node --test \"test/browser/*.test.ts\"",
+    "test:docs": "node --test \"test/docs/*.test.{ts,mjs}\"",
     "test:hooks": "claude plugin test .",
     "validate": "claude plugin validate ."
   },
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "^7.0.2"
+  }
 }
