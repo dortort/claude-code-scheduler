@@ -172,6 +172,9 @@ suite.
 suite, which needs the `playwright` package and its Chromium (`npm install --no-save
 playwright` and `npx playwright install chromium` once, unless both are already
 installed). The `validate` and `test:hooks` scripts need the `claude` CLI on `PATH`.
+`test:e2e` drives a real interactive session in tmux with real Chromium and needs
+`tmux`, Playwright's Chromium, `claude` and model access; it skips, saying which is
+missing, otherwise. [`test/e2e/README.md`](test/e2e/README.md) has the details.
 
 ```bash
 cd plugins/artifact-callbacks
@@ -182,6 +185,7 @@ npm run test:unit
 npm run test:conformance         # HTTP conformance suite against sidecar/listener.ts
 npm run test:browser             # Chromium end-to-end tests of sidecar/client.js
 npm run test:docs                # README, SKILL.md, plugin.json and marketplace checks
+npm run test:e2e                 # a real claude session in tmux plus Chromium (not part of npm test)
 
 npm run validate                 # claude plugin validate .: manifest, hooks module and types
 npm run test:hooks               # claude plugin test .: hooks module suites (hooks/*.test.ts; the node suites are *.spec.ts)

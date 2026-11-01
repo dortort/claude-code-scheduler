@@ -14,6 +14,7 @@
     "test:conformance": "node --test \"test/conformance/*.spec.ts\"",
     "test:browser": "node --test \"test/browser/*.spec.ts\"",
     "test:docs": "node --test \"test/docs/*.spec.ts\"",
+    "test:e2e": "node --test \"test/e2e/*.spec.ts\"",
     "test:hooks": "claude plugin test .",
     "validate": "claude plugin validate ."
   },

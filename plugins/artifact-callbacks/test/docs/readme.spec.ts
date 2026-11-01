@@ -145,7 +145,7 @@ describe('README', () => {
   })
 
   test('every npm script it mentions exists', () => {
-    for (const [, name] of readme.matchAll(/npm run ([a-z:-]+)/g)) assert.ok(name in pkg.scripts, `npm run ${name}`)
+    for (const [, name] of readme.matchAll(/npm run ([a-z0-9:-]+)/g)) assert.ok(name in pkg.scripts, `npm run ${name}`)
   })
 
   test('the hand-written example uses only wired attributes and a valid action', () => {
