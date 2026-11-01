@@ -75,7 +75,7 @@ async function unavailable (): Promise<string | undefined> {
   } finally {
     await browser?.close()
   }
-  const probe = realpathSync(mkdtempSync(join(tmpdir(), 'cb-e2e-probe-')))
+  const probe = realpathSync.native(mkdtempSync(join(tmpdir(), 'cb-e2e-probe-')))
   try {
     const out = await new Promise<string>((resolve) => {
       execFile('claude', ['-p', 'Reply with exactly: PONG'], { cwd: probe, env: sessionEnv(), timeout: 120_000 }, (err, stdout, stderr) => {
@@ -240,7 +240,7 @@ describe('real interactive session', { skip: reason ?? false, timeout: 20 * 60_0
   let base = ''
 
   before(async () => {
-    project = realpathSync(mkdtempSync(join(tmpdir(), 'cb-e2e-')))
+    project = realpathSync.native(mkdtempSync(join(tmpdir(), 'cb-e2e-')))
     execFileSync('git', ['init', '-q', project])
     mkdirSync(join(project, '.claude', 'artifacts'), { recursive: true })
     writeFileSync(join(project, '.claude', 'artifacts', 'e2e.html'), PAGE)
