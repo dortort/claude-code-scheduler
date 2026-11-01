@@ -299,6 +299,7 @@ artifact-callbacks/
 | `allowFileOrigin` | boolean | `false` | Enables token mode for file:// pages |
 | `maxPromptChars` | number | `4000` | Cap on the rendered prompt |
 | `autoStart` | boolean | `true` | Off: listener starts on `/callbacks start` |
+| `streamReplies` | boolean | `false` | M5: write Claude's reply text for each event so the page can stream it from `/_cb/events/<id>/stream`; off, no stream folder is passed and the stream carries only states |
 
 **Slash command** `/callbacks`
 

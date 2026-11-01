@@ -90,6 +90,17 @@ describe('README options', () => {
     assert.ok(specKeys.length >= 6)
     for (const key of specKeys) assert.ok(key in manifest.userConfig, `${key} is in plugin.json`)
   })
+
+  test('every plugin.json option is in the spec, with the same default', () => {
+    const rows = tableRows(section(spec, 'Configuration, packaging and commands').split('**Options**')[1])
+    const specRows = new Map(rows.map((r) => [firstCode(r[0]) ?? '', r]))
+    for (const [key, opt] of Object.entries(manifest.userConfig)) {
+      const row = specRows.get(key)
+      assert.ok(row, `SPEC Options table lists ${key}`)
+      const dflt = (opt as { default?: unknown }).default
+      assert.equal(firstCode(row[2] ?? ''), String(dflt), `SPEC default of ${key}`)
+    }
+  })
 })
 
 describe('remote session detection', () => {

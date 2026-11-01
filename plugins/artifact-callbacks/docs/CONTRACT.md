@@ -284,6 +284,10 @@ token mode carry:
   event's turn starts; exactly one of the two carries it. Pumps started from a
   `/callbacks` command run off a `$.clock.after(0)` timer, because a submit made inside a
   `command.run` hook is refused.
+- Reply streaming (`streamReplies` option, default `false`, M5): when on, the mod passes
+  `CB_STREAM_DIR=<run dir>/streams` and a `turn.step` hook appends the main agent's text for the
+  event that owns the turn to `<id>.ndjson` (see Streaming); when off, `CB_STREAM_DIR` is not set
+  and no `turn.step` hook is registered.
 - Supervision: sidecar exit → restart after 1 s, 5 s, 30 s, keeping the port when free;
   after 3 failures stay down and toast once.
 - Compose section (`prompt.compose`, `scope: 'session'`) present only while the listener
