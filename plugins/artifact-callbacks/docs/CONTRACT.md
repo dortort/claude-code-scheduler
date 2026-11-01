@@ -19,7 +19,7 @@ plugins/artifact-callbacks/                 the mod (one plugin folder)
   sidecar/client.js                         browser helper (JS + JSDoc, // @ts-check), served at /_cb/client.js
   skills/interactive-artifacts/SKILL.md     authoring guide
   test/                                     node:test suites (unit, conformance, browser e2e)
-  test/conformance/                         HTTP conformance suite run against BOTH listeners
+  test/conformance/                         HTTP conformance suite (CB_LISTENER_CMD, default node sidecar/listener.ts)
   package.json                              dev scripts only; the plugin ships no node_modules
 plugins/artifact-callbacks-channel/         M5 channel adapter plugin (MCP server), own manifest
 ```

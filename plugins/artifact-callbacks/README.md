@@ -154,17 +154,19 @@ main residual risk: the confirm band, on-disk template matching and the skill's 
 
 ## Development
 
-Tests need Node.js >= 18 and nothing from npm, except the browser suite, which needs
-the `playwright` package and its Chromium (`npm install --no-save playwright` and
+Tests need Node.js >= 22.18, which runs the TypeScript sources directly. `npm install`
+brings the dev-only `typescript` and `@types/node` for `npm run typecheck`; the suites
+themselves need nothing from npm, except the browser suite, which needs the
+`playwright` package and its Chromium (`npm install --no-save playwright` and
 `npx playwright install chromium` once, unless both are already installed). The
 `validate` and `test:hooks` scripts need the `claude` CLI on `PATH`.
 
 ```bash
 cd plugins/artifact-callbacks
-npm test                         # unit, conformance (Node listener), browser and docs suites
+npm test                         # unit, conformance, browser and docs suites
+npm run typecheck                # tsc --noEmit over sidecar/*.ts, client.js (// @ts-check) and the tests
 npm run test:unit
-npm run test:conformance         # HTTP conformance suite against sidecar/listener.mjs
-npm run test:conformance:python  # the same suite against sidecar/listener.py
+npm run test:conformance         # HTTP conformance suite against sidecar/listener.ts
 npm run test:browser             # Chromium end-to-end tests of sidecar/client.js
 npm run test:docs                # README, SKILL.md, plugin.json and marketplace checks
 

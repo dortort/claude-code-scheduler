@@ -3,9 +3,10 @@ import { test, describe, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdirSync, symlinkSync, writeFileSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { startListener, assertBaseHeaders, rawSocket, PLUGIN_DIR } from './harness.mjs'
+import { startListener, assertBaseHeaders, rawSocket, PLUGIN_DIR } from './harness.ts'
+import type { Listener } from './harness.ts'
 
-let L
+let L: Listener
 before(async () => {
   L = await startListener()
   L.writePage('p.html', '<!doctype html><p>hi</p>')
@@ -14,7 +15,7 @@ before(async () => {
 after(async () => { await L.cleanup() })
 
 describe('Host header (DNS rebinding)', () => {
-  const badHosts = (port) => [
+  const badHosts = (port: number): (string | undefined)[] => [
     'evil.example',
     `evil.example:${port}`,
     `rebind.attacker.test:${port}`,
@@ -103,7 +104,7 @@ describe('health and client.js', () => {
   test('GET /_cb/health → 200 JSON with paused from status.json', async () => {
     let r = await L.req({ path: '/_cb/health' })
     assert.equal(r.status, 200)
-    assert.match(r.headers['content-type'], /^application\/json/)
+    assert.match(String(r.headers['content-type']), /^application\/json/)
     assert.deepEqual(r.json, { ok: true, paused: false })
     assertBaseHeaders(assert, r)
     L.writeStatus({ paused: true })
@@ -158,6 +159,7 @@ describe('/a/ static serving', () => {
     assert.equal(r.headers['content-type'], 'text/html; charset=utf-8')
     assertBaseHeaders(assert, r)
     const sc = r.headers['set-cookie']
+    assert.ok(sc)
     assert.equal(sc.length, 1)
     const parts = sc[0].split(';').map((s) => s.trim())
     assert.equal(parts[0], `${L.cookieName}=${L.cookieValue}`)

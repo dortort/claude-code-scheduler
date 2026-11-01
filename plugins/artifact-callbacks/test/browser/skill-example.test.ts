@@ -3,13 +3,14 @@
 // event the skill says it does, with its template accepted from disk.
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { launch, startListener, events, settledEvents, open, waitAttr, waitFor } from './helpers.mjs'
+import { launch, startListener, events, settledEvents, open, waitAttr, waitFor } from './helpers.ts'
+import type { Browser, Line, Listener, Page } from './helpers.ts'
 import { PLUGIN_DIR, read, section, codeBlocks } from '../docs/helpers.mjs'
 
 const skill = read(PLUGIN_DIR, 'skills', 'interactive-artifacts', 'SKILL.md')
-const html = codeBlocks(section(skill, 'Complete example')).find((b) => b.lang === 'html').code
+const html = codeBlocks(section(skill, 'Complete example')).find((b: { lang: string }) => b.lang === 'html')!.code
 
-let browser, L
+let browser: Browser, L: Listener
 before(async () => {
   browser = await launch()
   L = await startListener()
@@ -20,7 +21,7 @@ after(async () => {
   await L.cleanup()
 })
 
-async function clickAndGet (p, selector) {
+async function clickAndGet (p: Page, selector: string): Promise<Line> {
   const m = events(L).length
   await p.click(selector)
   await waitFor(() => events(L).length > m, { what: 'event' })
@@ -85,7 +86,7 @@ test('Re-run tests uses its data-cb-label', async () => {
 test('Quarantine all asks first: dismissing sends nothing, accepting sends', async () => {
   const { page: p, ctx } = await open(browser, `${L.origin}/a/triage.html`)
   try {
-    const dialogs = []
+    const dialogs: string[] = []
     p.once('dialog', (d) => { dialogs.push(d.message()); d.dismiss() })
     const m = events(L).length
     await p.click('button[data-cb-action="quarantine-all"]')

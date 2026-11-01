@@ -4,22 +4,50 @@ import assert from 'node:assert/strict'
 import http from 'node:http'
 import { appendFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { startListener, makeDirs, waitFor, sleep, assertBaseHeaders } from './harness.mjs'
+import { startListener, makeDirs, waitFor, sleep, assertBaseHeaders } from './harness.ts'
+import type { Headers, Listener } from './harness.ts'
+import type { IncomingHttpHeaders, IncomingMessage, OutgoingHttpHeaders } from 'node:http'
 
 const PAGE = '<!doctype html><button data-cb-action="ask">Ask</button>'
 
+interface Frame { event: string; data: any }
+
+interface Stream {
+  res: IncomingMessage
+  status: number | undefined
+  headers: IncomingHttpHeaders
+  frames: Frame[]
+  comments: string[]
+  raw: string
+  ended: boolean
+  closed: Promise<void>
+  destroy (): void
+}
+
 /** Open an SSE stream; collects frames { event, data } and comments. */
-function openStream (L, id, headers = {}) {
+function openStream (L: Listener, id: string, headers: Headers = {}): Promise<Stream> {
   return new Promise((resolve, reject) => {
-    const h = { host: L.host, cookie: `${L.cookieName}=${L.cookieValue}`, 'sec-fetch-site': 'same-origin', accept: 'text/event-stream', ...headers }
+    const h: OutgoingHttpHeaders = { host: L.host, cookie: `${L.cookieName}=${L.cookieValue}`, 'sec-fetch-site': 'same-origin', accept: 'text/event-stream', ...headers }
     for (const k of Object.keys(h)) if (h[k] === undefined) delete h[k]
     const req = http.request({ host: '127.0.0.1', port: L.port, path: `/_cb/events/${id}/stream`, headers: h, agent: false })
     req.once('error', reject)
     req.once('response', (res) => {
-      const S = { res, status: res.statusCode, headers: res.headers, frames: [], comments: [], raw: '', ended: false }
+      let onClose = (): void => {}
+      const S: Stream = {
+        res,
+        status: res.statusCode,
+        headers: res.headers,
+        frames: [],
+        comments: [],
+        raw: '',
+        ended: false,
+        closed: new Promise<void>((r) => { onClose = r }),
+        destroy: () => req.destroy()
+      }
+      res.once('close', () => { S.ended = true; onClose() })
       let buf = ''
       res.setEncoding('utf8')
-      res.on('data', (d) => {
+      res.on('data', (d: string) => {
         S.raw += d
         buf += d
         let i
@@ -27,7 +55,7 @@ function openStream (L, id, headers = {}) {
           const block = buf.slice(0, i)
           buf = buf.slice(i + 2)
           let event = 'message'
-          const data = []
+          const data: string[] = []
           for (const line of block.split('\n')) {
             if (line.startsWith(':')) S.comments.push(line.slice(1).trim())
             else if (line.startsWith('event:')) event = line.slice(6).trim()
@@ -36,15 +64,13 @@ function openStream (L, id, headers = {}) {
           if (data.length) S.frames.push({ event, data: JSON.parse(data.join('\n')) })
         }
       })
-      S.closed = new Promise((r) => res.once('close', () => { S.ended = true; r() }))
-      S.destroy = () => req.destroy()
       resolve(S)
     })
     req.end()
   })
 }
 
-async function setup (env = {}) {
+async function setup (env: { [name: string]: string | undefined } = {}): Promise<{ L: Listener; id: string }> {
   const L = await startListener({ env: { CB_STREAM_DIR: undefined, ...env } })
   await L.serve('p.html', PAGE)
   const id = (await L.post({ v: 1, action: 'ask' })).json.id
@@ -62,7 +88,7 @@ describe('reply stream', () => {
       writeFileSync(file, JSON.stringify({ type: 'state', state: 'running' }) + '\n' + JSON.stringify({ type: 'text', text: 'Hello' }) + '\n')
       const S = await openStream(L, id)
       assert.equal(S.status, 200)
-      assert.match(S.headers['content-type'], /^text\/event-stream/)
+      assert.match(String(S.headers['content-type']), /^text\/event-stream/)
       assertBaseHeaders(assert, { headers: S.headers })
       await waitFor(() => S.frames.length >= 2, { what: 'replayed frames' })
       assert.deepEqual(S.frames, [
