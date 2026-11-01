@@ -5,7 +5,7 @@ import type {
   ArtifactCallbacksEventRecord as EventRecord,
   ArtifactCallbacksListener as Listener,
   ArtifactCallbacksPending as Pending,
-} from '../../types'
+} from '../../types/index.d.ts'
 import { MAX_RECORDS } from './queue.ts'
 
 export type StatusFileEvent = {
@@ -16,6 +16,17 @@ export type StatusFileEvent = {
   turnStartedAt: number | null
   turnEndedAt: number | null
   note: string | null
+  /** Only on `dropped` records: why (`paused`, `queue-full`, `rate-limit`), so the page can say so. */
+  reason?: DropReason
+}
+
+/** Why an event was dropped, as the page explains it (CONTRACT GET /_cb/events). */
+export type DropReason = 'paused' | 'queue-full' | 'rate-limit'
+const DROP_REASONS: ReadonlySet<string> = new Set<DropReason>(['paused', 'queue-full', 'rate-limit'])
+
+/** The drop reason a dropped record carries in its note, if it is one. */
+export function dropReason(r: Pick<EventRecord, 'state' | 'note'>): DropReason | undefined {
+  return r.state === 'dropped' && r.note !== null && DROP_REASONS.has(r.note) ? (r.note as DropReason) : undefined
 }
 
 export type StatusFile = {
@@ -33,6 +44,7 @@ export function buildStatus(input: {
 }): StatusFile {
   const events: Record<string, StatusFileEvent> = {}
   for (const r of input.events.slice(-MAX_RECORDS)) {
+    const reason = dropReason(r)
     events[r.id] = {
       id: r.id,
       state: r.state,
@@ -41,6 +53,7 @@ export function buildStatus(input: {
       turnStartedAt: r.turnStartedAt,
       turnEndedAt: r.turnEndedAt,
       note: r.note,
+      ...(reason !== undefined ? { reason } : {}),
     }
   }
   return { v: 1, paused: input.paused, queueDepth: input.queue.length, events }

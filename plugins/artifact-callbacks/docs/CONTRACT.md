@@ -106,7 +106,9 @@ Event ids: `ev_` + 10 chars of `[a-z0-9]`, from a CSPRNG.
 ```
 
 States: `queued`, `awaiting-approval`, `running`, `done`, `rejected`, `dropped`,
-`expired`. `queueDepth` = events the mod holds that have not started a turn
+`expired`. A `dropped` record also carries `reason` (`paused`, `queue-full` or `rate-limit`),
+including one the listener accepted (202) and the mod then dropped because it was paused or
+full, so the page can say why. `queueDepth` = events the mod holds that have not started a turn
 (`queued` + `awaiting-approval`). The mod keeps at most the 200 newest records.
 The sidecar must tolerate a missing or unparsable file (treat as
 `{paused:false, queueDepth:0, events:{}}`, keep using the last good parse).
