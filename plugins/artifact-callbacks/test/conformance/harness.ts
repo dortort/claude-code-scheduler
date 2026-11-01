@@ -145,7 +145,7 @@ export function pidAlive (pid: number): boolean {
 
 /** Temp folder layout: root/, run/status.json, run/streams/. */
 export function makeDirs (): Dirs {
-  const base = realpathSync(mkdtempSync(join(tmpdir(), 'cb-conf-')))
+  const base = realpathSync.native(mkdtempSync(join(tmpdir(), 'cb-conf-')))
   const root = join(base, 'artifacts')
   const run = join(base, 'run')
   const streams = join(run, 'streams')

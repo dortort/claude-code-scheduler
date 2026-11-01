@@ -145,7 +145,7 @@ describe('artifact paths', () => {
     assert.equal(pageFromReferer(undefined, 5), null)
   })
   test('resolveInsideRoot follows rules', async () => {
-    const base = realpathSync(mkdtempSync(join(tmpdir(), 'cb-unit-')))
+    const base = realpathSync.native(mkdtempSync(join(tmpdir(), 'cb-unit-')))
     try {
       const root = join(base, 'root')
       mkdirSync(join(root, 'sub'), { recursive: true })

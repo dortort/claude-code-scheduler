@@ -149,8 +149,11 @@ function headerString (v: string | string[] | undefined): string | undefined {
 }
 
 function start (cfg: CheckedConfig): void {
-  const rootReal = realpathSync(cfg.root)
-  const rootCandidates = [...new Set([cfg.root.replace(/\/+$/, ''), rootReal])]
+  // realpathSync.native, like fs/promises realpath in resolveInsideRoot: on Windows the
+  // JS realpathSync keeps 8.3 short names (C:\Users\RUNNER~1) that native expands,
+  // and a root in one form never prefixes a file resolved in the other.
+  const rootReal = realpathSync.native(cfg.root)
+  const rootCandidates = [...new Set([cfg.root.replace(/\/+$/, ''), realpathSync(cfg.root), rootReal])]
   let port = 0
   let cookie = ''
   let cookieKey = ''
