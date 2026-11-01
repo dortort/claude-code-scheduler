@@ -9,6 +9,7 @@
 
 import type { Register } from 'claude-code'
 import { configFrom, createController, type Effects, type Snapshot } from './lib/controller.ts'
+import { remoteKind } from './lib/host.ts'
 import { firstAwaiting } from './lib/queue.ts'
 import { COMPOSE_SECTION_ID } from './lib/status.ts'
 import { PAGE_TOKEN_TOOL } from './lib/token.ts'
@@ -19,7 +20,15 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     const started = await next(e)
     if (!e.isInteractive) return started
-    const isRemote = (await $.env.get('CLAUDE_CODE_REMOTE')) === 'true'
+    // A cloud session or an SSH login: the browser cannot reach this machine's loopback.
+    // ($.env.get takes literal names, so each variable is read on its own.)
+    const remote = remoteKind({
+      CLAUDE_CODE_REMOTE: await $.env.get('CLAUDE_CODE_REMOTE'),
+      SSH_CONNECTION: await $.env.get('SSH_CONNECTION'),
+      SSH_CLIENT: await $.env.get('SSH_CLIENT'),
+      SSH_TTY: await $.env.get('SSH_TTY'),
+    })
+    const isRemote = remote !== undefined
     const effects: Effects = {
       pluginRoot: $.plugin.root,
       now: () => $.clock.now(),
@@ -93,7 +102,7 @@ export const register: Register = (on, options) => {
         immediate: true,
       })
     }
-    await cb.start(effects, e.cwd, isRemote)
+    await cb.start(effects, e.cwd, remote)
     return started
   })
 

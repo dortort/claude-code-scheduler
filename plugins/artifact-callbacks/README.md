@@ -144,8 +144,9 @@ main residual risk: the confirm band, on-disk template matching and the skill's 
 
 - **Interactive local sessions only.** Headless runs (`claude -p`, SDK hosts) report
   `isInteractive: false` and the mod does nothing.
-- **Remote and container sessions** (claude.ai cloud sessions, `CLAUDE_CODE_REMOTE=true`,
-  SSH) stay off: the listener's loopback is the remote machine's, not your browser's.
+- **Remote and container sessions** stay off: claude.ai cloud sessions
+  (`CLAUDE_CODE_REMOTE=true`) and SSH logins (`SSH_CONNECTION`, `SSH_CLIENT` or
+  `SSH_TTY` set). The listener's loopback is the remote machine's, not your browser's.
   There is no tunnel by design.
 - **Published claude.ai artifacts** run on another origin and cannot reach your loopback;
   they are not supported.

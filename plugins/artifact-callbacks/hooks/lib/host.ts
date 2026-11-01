@@ -94,3 +94,24 @@ export function randomHex(bytes: number): string {
   for (const b of buf) out += b.toString(16).padStart(2, '0')
   return out
 }
+
+/** Why this machine's loopback is not the browser's: a cloud session or an SSH login. */
+export type RemoteKind = 'remote' | 'ssh'
+
+/**
+ * A claude.ai cloud or container session (`CLAUDE_CODE_REMOTE=true`), an SSH
+ * login (`SSH_CONNECTION`, `SSH_CLIENT` or `SSH_TTY` set and not empty), or
+ * undefined for a session whose browser shares this machine's loopback.
+ */
+export function remoteKind(env: Readonly<Record<string, string | undefined>>): RemoteKind | undefined {
+  if (env.CLAUDE_CODE_REMOTE === 'true') return 'remote'
+  if (['SSH_CONNECTION', 'SSH_CLIENT', 'SSH_TTY'].some(name => (env[name] ?? '') !== '')) return 'ssh'
+  return undefined
+}
+
+/** The listener's off reason for a remote session, as the status report shows it. */
+export function remoteReason(kind: RemoteKind): string {
+  return kind === 'ssh'
+    ? "SSH session: this machine's loopback is not your browser's"
+    : "remote session: this machine's loopback is not your browser's"
+}
