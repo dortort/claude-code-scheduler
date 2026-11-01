@@ -51,13 +51,18 @@ describe('artifact-callbacks workflow', () => {
     assert.ok(wf.includes('claude plugin validate "$dir"'))
   })
 
-  test('typechecks the node sources and the hooks module after npm ci', () => {
+  test('typechecks the node sources after npm ci; the hooks module needs engine-written types', () => {
     const j = job('typecheck')
     assert.match(j, /run: npm ci\n/)
-    assert.match(j, /run: npm run typecheck\n/)
-    assert.ok(j.indexOf('npm ci') < j.indexOf('npm run typecheck'))
-    assert.match(scripts.typecheck, /-p tsconfig\.node\.json/, 'typecheck covers the node sources')
-    assert.match(scripts.typecheck, /-p tsconfig\.json/, 'typecheck covers the hooks module')
+    assert.match(j, /run: npm run typecheck:node\n/)
+    assert.ok(j.indexOf('npm ci') < j.indexOf('npm run typecheck:node'))
+    // CI has no engine to write .claude-plugin/types, so the hooks module is checked
+    // there by `claude plugin validate` and `claude plugin test` instead of tsc.
+    assert.doesNotMatch(wf, /npm run typecheck:hooks/)
+    assert.equal(scripts['typecheck:node'], 'tsc --noEmit -p tsconfig.node.json')
+    assert.equal(scripts['typecheck:hooks'], 'tsc --noEmit -p tsconfig.json')
+    assert.match(scripts.typecheck, /typecheck:node/)
+    assert.match(scripts.typecheck, /typecheck:hooks/)
   })
 
   test('both tsconfigs enforce erasable syntax and verbatim module syntax (CONTRACT "Language")', () => {

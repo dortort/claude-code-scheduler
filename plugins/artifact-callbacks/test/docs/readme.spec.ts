@@ -158,7 +158,7 @@ describe('README Node requirement', () => {
     const dev = section(readme, 'Development')
     assert.match(dev, /^npm ci\b/m)
     assert.match(dev, /^npm test\b/m)
-    for (const name of Object.keys(pkg.scripts).filter((s) => s === 'typecheck' || s === 'validate' || s.startsWith('test:'))) {
+    for (const name of Object.keys(pkg.scripts).filter((s) => s.startsWith('typecheck') || s === 'validate' || s.startsWith('test:'))) {
       assert.match(dev, new RegExp(`^npm run ${name}\\b`, 'm'), `Development lists npm run ${name}`)
     }
   })

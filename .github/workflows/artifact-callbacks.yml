@@ -31,7 +31,7 @@ concurrency:
 
 jobs:
   typecheck:
-    name: Typecheck (node sources and hooks module)
+    name: Typecheck (node sources)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -41,8 +41,10 @@ jobs:
           node-version: '22.18.0'
       - name: Install dev dependencies
         run: npm ci
+      # The hooks module's tsc check needs .claude-plugin/types, which only a session
+      # loading the mod writes; the plugin job checks that module with validate and test.
       - name: Typecheck
-        run: npm run typecheck
+        run: npm run typecheck:node
 
   node:
     name: Node tests (${{ matrix.os }}, Node ${{ matrix.node-version }})
