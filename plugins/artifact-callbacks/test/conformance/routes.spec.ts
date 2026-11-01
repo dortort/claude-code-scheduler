@@ -136,6 +136,33 @@ describe('health and client.js', () => {
     assert.ok(!r.body.includes(L.cookieValue))
   })
 
+  test('client.js refuses cross-site and same-site loads (no running the client on another site)', async () => {
+    for (const sfs of ['same-origin', 'none', undefined]) {
+      const r = await L.req({ path: '/_cb/client.js', headers: { 'sec-fetch-site': sfs } })
+      assert.equal(r.status, 200, `Sec-Fetch-Site ${sfs}`)
+    }
+    for (const sfs of ['cross-site', 'same-site', 'bogus']) {
+      const before = L.lines.length
+      const r = await L.req({ path: '/_cb/client.js', headers: { 'sec-fetch-site': sfs, origin: 'http://localhost:1' } })
+      assert.equal(r.status, 403, `Sec-Fetch-Site ${sfs}`)
+      assert.equal(r.body, '')
+      assertBaseHeaders(assert, r)
+      await L.marker()
+      const line = L.lines.slice(before).find((l) => l.type === 'rejected')
+      assert.deepEqual(line, { type: 'rejected', reason: 'sec-fetch-site', path: '/_cb/client.js', origin: 'http://localhost:1' })
+    }
+  })
+
+  test('in token mode file:// pages (cross-site) may load client.js; same-site still may not', async () => {
+    const M = await startListener({ env: { CB_ALLOW_FILE_ORIGIN: '1' } })
+    try {
+      assert.equal((await M.req({ path: '/_cb/client.js', headers: { 'sec-fetch-site': 'cross-site' } })).status, 200)
+      assert.equal((await M.req({ path: '/_cb/client.js', headers: { 'sec-fetch-site': 'same-site' } })).status, 403)
+    } finally {
+      await M.cleanup()
+    }
+  })
+
   test('CB_CLIENT_JS overrides the client path', async () => {
     const dirs = L.dirs
     const file = join(dirs.run, 'custom-client.js')

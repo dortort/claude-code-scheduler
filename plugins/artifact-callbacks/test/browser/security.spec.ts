@@ -125,3 +125,32 @@ describe('cross-origin pages cannot send events', () => {
     }
   })
 })
+
+describe('another site cannot run the client', () => {
+  for (const host of ['localhost', '127.0.0.1']) {
+    test(`a page on http://${host}:<other> fails to load /_cb/client.js`, async () => {
+      const probe = `<!doctype html><meta charset="utf-8"><script>
+const s = document.createElement('script')
+s.src = ${JSON.stringify(`${L.origin}/_cb/client.js`)}
+s.onload = () => { window.__probe = 'loaded:' + typeof window.ArtifactCallbacks }
+s.onerror = () => { window.__probe = 'error:' + typeof window.ArtifactCallbacks }
+document.head.appendChild(s)
+</script>`
+      const evil = await otherServer({ '/probe.html': probe }, host)
+      const before = L.lines.length
+      const ctx = await browser.newContext()
+      try {
+        const p = await ctx.newPage()
+        await p.goto(`http://${host}:${evil.port}/probe.html`)
+        await p.waitForFunction(() => typeof window.__probe === 'string', null, { timeout: 10000 })
+        assert.equal(await p.evaluate(() => window.__probe), 'error:undefined')
+        await L.marker()
+        const line = L.lines.slice(before).find((l) => l.type === 'rejected' && l.path === '/_cb/client.js')
+        assert.equal(line?.reason, 'sec-fetch-site')
+      } finally {
+        await ctx.close()
+        await evil.close()
+      }
+    })
+  }
+})

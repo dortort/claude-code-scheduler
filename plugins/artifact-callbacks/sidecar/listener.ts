@@ -308,7 +308,20 @@ function start (cfg: CheckedConfig): void {
     json(res, 200, { ok: true, paused: readStatus().paused })
   }
 
-  function clientJs (_req: Req, res: Res): void {
+  /**
+   * Who may load the client: the listener's own pages (`same-origin`), the user
+   * typing its URL (`none`), browsers that send no Sec-Fetch-Site, and in token
+   * mode file:// pages, which are `cross-site` by nature. Any other site gets a
+   * bare 403, so it cannot run the client in its own page.
+   */
+  function clientJsAllowed (req: Req): boolean {
+    const sfs = req.headers['sec-fetch-site']
+    if (sfs === undefined || sfs === 'same-origin' || sfs === 'none') return true
+    return cfg.allowFile && sfs === 'cross-site'
+  }
+
+  function clientJs (req: Req, res: Res, path: string): void {
+    if (!clientJsAllowed(req)) return reject(req, res, path, 'sec-fetch-site')
     let body: Buffer
     try {
       body = readFileSync(cfg.clientJs)
@@ -623,7 +636,7 @@ function start (cfg: CheckedConfig): void {
       bare(res, 405, { Allow: m })
     }
     if (path === '/_cb/health') return only('GET', () => health(req, res))
-    if (path === '/_cb/client.js') return only('GET', () => clientJs(req, res))
+    if (path === '/_cb/client.js') return only('GET', () => clientJs(req, res, path))
     if (path === '/_cb/event') return only('POST', () => postEvent(req, res, path))
     if (path.startsWith('/a/')) return only('GET', () => artifact(req, res, path))
     const m = EVENTS_RE.exec(path)

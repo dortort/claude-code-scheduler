@@ -114,7 +114,9 @@ The listener is a way to type into an agent that can run commands, so it treats 
 request as hostile until proven otherwise. Any website you have open can send requests
 to `127.0.0.1`; the design assumes that.
 
-- **Loopback only.** Binds `127.0.0.1`, never `0.0.0.0` or `::`. Random port per session.
+- **Loopback only.** Binds `127.0.0.1`, never `0.0.0.0` or `::`. Random port per session,
+  though any web page can find an open loopback port, so nothing relies on it being secret;
+  other sites cannot load `/_cb/client.js` (`Sec-Fetch-Site`).
 - **Same-origin plus a session cookie.** The listener serves the pages itself and sets an
   `HttpOnly; SameSite=Strict` cookie (`cb_session_<port>`, an HMAC of a per-session
   secret). Events must carry it, so another site cannot post events.
