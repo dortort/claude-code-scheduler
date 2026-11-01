@@ -279,14 +279,30 @@ export function pageFromBody (page: unknown): string | null {
   return checkRelativePath(p)
 }
 
+/** A Windows drive path (`C:\\x`, `C:/x`, or `/C:/x` as a file:// URL's pathname)
+ *  with forward slashes and no leading slash, or null for any other path. */
+function windowsDrivePath (p: string): string | null {
+  if (!/^\/?[A-Za-z]:[\\/]/.test(p)) return null
+  return (p.startsWith('/') ? p.slice(1) : p).replace(/\\/g, '/')
+}
+
 /**
  * Page path for a token-mode body `page`: an absolute file path inside one of
  * `roots` (as given or realpath'd) is made relative; otherwise pageFromBody.
+ * Windows drive paths match with either separator, with or without the leading
+ * slash a file:// URL's pathname has, and case-insensitively, as Windows does.
  */
 export function pageFromFileBody (page: unknown, roots: readonly (string | null | undefined)[]): string | null {
   if (typeof page !== 'string') return null
+  const winPage = windowsDrivePath(page)
   for (const r of roots) {
     if (!r) continue
+    const winRoot = windowsDrivePath(r)
+    if (winPage !== null && winRoot !== null) {
+      const prefix = winRoot.endsWith('/') ? winRoot : winRoot + '/'
+      if (winPage.toLowerCase().startsWith(prefix.toLowerCase())) return checkRelativePath(winPage.slice(prefix.length))
+      continue
+    }
     const prefix = r.endsWith('/') ? r : r + '/'
     if (page.startsWith(prefix)) return checkRelativePath(page.slice(prefix.length))
   }
