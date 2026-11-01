@@ -77,12 +77,15 @@ async function unavailable (): Promise<string | undefined> {
   }
   const probe = realpathSync.native(mkdtempSync(join(tmpdir(), 'cb-e2e-probe-')))
   try {
-    const out = await new Promise<string>((resolve) => {
-      execFile('claude', ['-p', 'Reply with exactly: PONG'], { cwd: probe, env: sessionEnv(), timeout: 120_000 }, (err, stdout, stderr) => {
-        resolve(err ? `${String(err.message)} ${stderr}` : stdout)
+    // Only a successful run's stdout counts: a failed run's error message quotes the
+    // command line, prompt and all, so it would contain the expected word too.
+    const why = await new Promise<string | undefined>((resolve) => {
+      execFile('claude', ['-p', 'Reply with the single word pong in capitals.'], { cwd: probe, env: sessionEnv(), timeout: 120_000 }, (err, stdout, stderr) => {
+        if (err) resolve(`exit ${String(err.code ?? err.signal)}: ${(stderr || stdout).trim().slice(0, 200)}`)
+        else resolve(stdout.includes('PONG') ? undefined : `unexpected reply: ${stdout.trim().slice(0, 200)}`)
       })
     })
-    if (!out.includes('PONG')) return `no model access from a nested claude: ${out.trim().slice(0, 200)}`
+    if (why !== undefined) return `no model access from a nested claude (${why})`
   } finally {
     rmSync(probe, { recursive: true, force: true })
     rmSync(projectDir(probe), { recursive: true, force: true })
@@ -255,6 +258,7 @@ describe('real interactive session', { skip: reason ?? false, timeout: 20 * 60_0
       const s = screen()
       const up = /callbacks :(\d+)/.exec(s)
       if (up) return Number(up[1])
+      if (s.includes('Select login method')) throw new Error('the nested claude is not logged in, though the access probe passed')
       if (/❯ No, exit/.test(s) && s.includes('Yes, I trust this folder')) keys('Down')
       else if (/❯ Yes, I trust this folder/.test(s)) keys('Enter')
       else if (s.includes('Choose the text style') || s.includes('Press Enter to continue')) keys('Enter')
