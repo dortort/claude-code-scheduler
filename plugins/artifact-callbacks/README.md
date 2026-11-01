@@ -119,7 +119,7 @@ to `127.0.0.1`; the design assumes that.
   other sites cannot load `/_cb/client.js` (`Sec-Fetch-Site`).
 - **Same-origin plus a session cookie.** The listener serves the pages itself and sets an
   `HttpOnly; SameSite=Strict` cookie (`cb_session_<port>`, an HMAC of a per-session
-  secret). Events must carry it, so another site cannot post events.
+  secret, scoped to `/_cb/`). Events must carry it, so another site cannot post events.
 - **Host and Origin checks** on every request defeat DNS rebinding and cross-site posts;
   `Sec-Fetch-Site` must be `same-origin`; only `application/json` bodies; no CORS headers
   ever (except the opt-in file:// token mode); failures get a bare `403`.
@@ -140,7 +140,10 @@ to `127.0.0.1`; the design assumes that.
 Pages you ask Claude to build from untrusted content (issue bodies, web pages) are the
 main residual risk: the confirm band, on-disk template matching and the skill's rules
 (no untrusted text in templates, escape everything shown) are the defences. Use
-`confirm: always` on shared machines.
+`confirm: always` on shared machines: other OS users can reach the loopback port too,
+and the session cookie is not a secret from them (anyone who fetches a served page gets
+one, and browsers send it to their `/_cb/` paths on other `127.0.0.1` ports, since cookies
+ignore ports), so the confirm band is what stops an event they forge.
 
 ## Limitations
 

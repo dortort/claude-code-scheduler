@@ -192,7 +192,7 @@ describe('/a/ static serving', () => {
     assert.equal(parts[0], `${L.cookieName}=${L.cookieValue}`)
     assert.match(parts[0], /^cb_session_\d+=[0-9a-f]{64}$/)
     const attrs = parts.slice(1).map((s) => s.toLowerCase()).sort()
-    assert.deepEqual(attrs, ['httponly', 'path=/', 'samesite=strict'])
+    assert.deepEqual(attrs, ['httponly', 'path=/_cb/', 'samesite=strict'])
   })
 
   test('nested html page', async () => {

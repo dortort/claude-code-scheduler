@@ -54,8 +54,8 @@ Promise.all([
 async function runAttack (attackerHost: string) {
   // The victim has a legit tab open, so the browser holds the session cookie.
   const { ctx } = await open(browser, `${L.origin}/a/p.html`)
-  const cookies = await ctx.cookies(L.origin)
-  assert.ok(cookies.some((c) => c.name === L.cookieName && c.sameSite === 'Strict' && c.httpOnly))
+  const cookies = await ctx.cookies(`${L.origin}/_cb/event`)
+  assert.ok(cookies.some((c) => c.name === L.cookieName && c.sameSite === 'Strict' && c.httpOnly && c.path === '/_cb/'))
   const before = L.lines.length
   const spySeen = spy.seen.length
   const evil = await otherServer({}, attackerHost)
@@ -101,16 +101,34 @@ describe('cross-origin pages cannot send events', () => {
     assert.ok(!(spyReq.headers.cookie || '').includes('cb_session_'), `cookie leaked: ${spyReq.headers.cookie}`)
   })
 
-  test('same-site attacker on another port (http://127.0.0.1:<other>): no event even though the cookie rides along', async () => {
+  test('same-site attacker on another port (http://127.0.0.1:<other>): no event, and the cookie stays off its paths', async () => {
     const { results, lines, spyReq } = await runAttack('127.0.0.1')
     assert.equal(lines.filter((l) => l.type === 'event' || l.type === 'dropped').length, 0, JSON.stringify(lines))
     assert.equal(results['cors-json'], 'error:TypeError')
     assert.equal(results['read-state'], 'error:TypeError')
     const rejected = lines.filter((l) => l.type === 'rejected')
     assert.ok(rejected.some((l) => l.reason === 'origin' && l.origin.startsWith('http://127.0.0.1:')))
-    // Ports do not make a different site, so the cookie is sent: the Origin check is what stops it.
+    // Ports do not make a different site, but the cookie is scoped to /_cb/, so a request
+    // to another port's /spy does not carry it.
     assert.ok(spyReq)
-    assert.match(spyReq.headers.cookie || '', new RegExp(`${L.cookieName}=`))
+    assert.doesNotMatch(spyReq.headers.cookie || '', new RegExp(`${L.cookieName}=`))
+  })
+
+  test('residual (documented): a server on another 127.0.0.1 port sees the cookie on its own /_cb/ paths', async () => {
+    // Cookies are not port-scoped: a same-site page that requests /_cb/... on its own
+    // port gets the session cookie sent to it. SPEC's security model states this.
+    const { ctx } = await open(browser, `${L.origin}/a/p.html`)
+    const seen = spy.seen.length
+    try {
+      const p = await ctx.newPage()
+      // The spy answers 204, which aborts the navigation; the request was still made.
+      await p.goto(`http://127.0.0.1:${spy.port}/_cb/anything`).catch(() => undefined)
+      const req = spy.seen.slice(seen).find((r) => r.url === '/_cb/anything')
+      assert.ok(req)
+      assert.match(req.headers.cookie || '', new RegExp(`${L.cookieName}=${L.cookieValue}`))
+    } finally {
+      await ctx.close()
+    }
   })
 
   test('the legit page still works afterwards', async () => {
