@@ -22,6 +22,23 @@ const SOURCE_KEYS: Record<string, string[]> = { npm: ['package'], github: ['repo
 const NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/
 const SEMVER = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/
 
+describe('release metadata', () => {
+  for (const name of ['artifact-callbacks', 'artifact-callbacks-channel']) {
+    test(`${name} keeps its manifest, dev package, lockfile and release notes aligned`, () => {
+      const root = join(REPO_DIR, 'plugins', name)
+      const manifest = readJson<PluginManifest>(root, '.claude-plugin', 'plugin.json')
+      const pkg = readJson<PackageJson>(root, 'package.json')
+      const lock = readJson<{ version: string; packages: Record<string, { version: string }> }>(root, 'package-lock.json')
+      assert.match(manifest.version, SEMVER)
+      for (const version of [pkg.version, lock.version, lock.packages['']?.version]) {
+        assert.equal(version, manifest.version, `${name} version metadata`)
+      }
+      const notes = read(root, 'releases', `${manifest.version}.md`)
+      assert.ok(notes.trim().length > 0, `${name} has release notes`)
+    })
+  }
+})
+
 describe('marketplace.json', () => {
   const m = readJson<Marketplace>(REPO_DIR, '.claude-plugin', 'marketplace.json')
 

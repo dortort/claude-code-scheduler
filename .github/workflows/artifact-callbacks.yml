@@ -8,6 +8,8 @@ on:
       - '.claude-plugin/marketplace.json'
       - 'README.md'
       - '.github/workflows/artifact-callbacks.yml'
+      - '.github/workflows/artifact-release.yml'
+      - 'RELEASING.md'
   pull_request:
     branches: [main]
     paths:
@@ -15,6 +17,8 @@ on:
       - '.claude-plugin/marketplace.json'
       - 'README.md'
       - '.github/workflows/artifact-callbacks.yml'
+      - '.github/workflows/artifact-release.yml'
+      - 'RELEASING.md'
   workflow_dispatch:
 
 defaults:
