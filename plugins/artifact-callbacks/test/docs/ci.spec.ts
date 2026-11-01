@@ -60,6 +60,15 @@ describe('artifact-callbacks workflow', () => {
     assert.match(scripts.typecheck, /-p tsconfig\.json/, 'typecheck covers the hooks module')
   })
 
+  test('both tsconfigs enforce erasable syntax and verbatim module syntax (CONTRACT "Language")', () => {
+    for (const file of ['tsconfig.json', 'tsconfig.node.json']) {
+      const opts = readJson<{ compilerOptions: Record<string, unknown> }>(PLUGIN_DIR, file).compilerOptions
+      assert.equal(opts.erasableSyntaxOnly, true, `${file} sets erasableSyntaxOnly`)
+      assert.equal(opts.verbatimModuleSyntax, true, `${file} sets verbatimModuleSyntax`)
+      assert.equal(opts.allowImportingTsExtensions, true, `${file} sets allowImportingTsExtensions`)
+    }
+  })
+
   test('runs the node suites on every OS and on the oldest and a current supported Node', () => {
     const j = job('node')
     assert.match(j, /runs-on: \$\{\{ matrix\.os \}\}/)
