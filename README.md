@@ -21,7 +21,8 @@ Install any of them:
 
 The scheduler requires Node.js >= 18, the Claude Code CLI, and macOS or Linux.
 See its [documentation](plugins/scheduler/README.md) for commands and configuration.
-Artifact Callbacks is a mod that needs Node.js >= 18 or Python >= 3.8; see its
+Artifact Callbacks is a mod that needs Node.js >= 22.18, which runs its TypeScript
+listener directly (no build step, no Python); see its
 [documentation](plugins/artifact-callbacks/README.md).
 Skills remain in their own repository so they can also be copied or used with other
 tools that support their format and dependencies.
@@ -32,14 +33,19 @@ tools that support their format and dependencies.
 .claude-plugin/marketplace.json   Marketplace catalog
 plugins/
   scheduler/                    @dortort/scheduler source and plugin manifest
-  artifact-callbacks/           Artifact Callbacks mod (hooks module, sidecar, skill)
+  artifact-callbacks/           Artifact Callbacks mod, TypeScript on Node >= 22.18
+    hooks/                      hooks module (register.tsx, lib/*.ts, *.test.ts suites)
+    sidecar/                    loopback listener (listener.ts, lib.ts) and browser client.js
+    skills/                     interactive-artifacts authoring skill
+    test/                       node:test suites (*.spec.ts) and docs checks
 ```
 
 Claude-specific plugins and mods live under `plugins/`. The marketplace installs
 the scheduler's published npm package, which includes compiled JavaScript, rather
 than its unbuilt source directory. Its npm name remains `@dortort/scheduler`.
-The skills entry references `dortort/skills` directly. Artifact Callbacks ships no
-build step, so its entry is a relative path to its folder.
+The skills entry references `dortort/skills` directly. Artifact Callbacks ships its
+TypeScript sources as they are (Node >= 22.18 runs them without a build step), so its
+entry is a relative path to its folder.
 
 ## Development
 
@@ -64,10 +70,11 @@ For Artifact Callbacks, see its [development notes](plugins/artifact-callbacks/R
 
 ```bash
 cd plugins/artifact-callbacks
+npm ci
+npm run typecheck
 npm test
-npm run test:docs
-claude plugin validate .
-claude plugin test .
+npm run validate
+npm run test:hooks
 ```
 
 CI and npm publishing for the scheduler run from `plugins/scheduler`. See the scheduler's

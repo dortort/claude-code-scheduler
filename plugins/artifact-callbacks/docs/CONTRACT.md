@@ -241,7 +241,7 @@ token mode carry:
 - Runtime check: `node --version` via `$.process.run`; it must be >= 22.18.0, else the
   listener stays down with reason `node-missing` or `node-too-old` (found and minimum
   versions shown by the status line and `/callbacks`). argv
-  `["node", "<root>/sidecar/listener.ts"]`. There is no `runtime` option and no Python.
+  `["node", "<root>/sidecar/listener.ts"]`. There is no `runtime` option and no other listener runtime.
 - Run dir: a per-session folder outside the artifacts folder (e.g.
   `<cwd>/.claude/.artifact-callbacks/<session id>/`) holding `status.json` and `streams/`.
 - Queue: FIFO depth cap 5, one event in flight (`current`), confirm policy, 5 min

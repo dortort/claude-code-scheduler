@@ -16,6 +16,12 @@ this session" section. It names the real port and folder. When it is absent the 
 is down, paused or not installed: write a static page instead and do not hand out a
 `127.0.0.1` link.
 
+The listener runs as `node sidecar/listener.ts` and needs Node.js 22.18 or later on the
+user's `PATH`; there is no other runtime and no setting to pick one. If the user asks
+why the section is missing, `/callbacks` shows the reason: `node-missing` or
+`node-too-old` means they should install Node 22.18 or later and run
+`/callbacks start`. Do not try to start a listener yourself.
+
 ## Checklist for every page
 
 1. Save the page under the artifacts folder the section names (default
