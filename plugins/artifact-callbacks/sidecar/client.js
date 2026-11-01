@@ -267,6 +267,12 @@
       this._timer = null
       /** @type {Closable | null} */
       this._stream = null
+      /** True once the reply stream has ended (end frame, error or close). */
+      this._streamEnded = false
+      /** @type {string | null} A terminal state the reply stream announced, applied when it ends. */
+      this._streamTerminal = null
+      /** @type {{ state: string, extra: StateExtra | undefined } | null} A terminal state polling saw while the stream was open. */
+      this._pending = null
       /** @type {(h: Handle) => void} */
       this._resolve = function () {}
       /** @type {(e: EventError) => void} */
@@ -340,6 +346,47 @@
       }
     }
 
+    /**
+     * Applies a state seen by polling. A terminal one waits while the reply
+     * stream is open, so `done` never resolves before the reply's last text.
+     * @param {string} state @param {StateExtra} [extra]
+     */
+    _finish (state, extra) {
+      if (TERMINAL[state] && this._stream && !this._streamEnded) {
+        this._pending = { state: state, extra: extra }
+        return
+      }
+      this._set(state, extra)
+    }
+
+    /** A state frame from the reply stream; a terminal one is applied when the stream ends. @param {string} state */
+    _streamState (state) {
+      if (TERMINAL[state]) this._streamTerminal = state
+      else this._set(state)
+    }
+
+    /** The reply stream is over (end frame, error or close): apply the terminal state it or polling saw. */
+    _streamClosed () {
+      if (this._streamEnded) return
+      this._streamEnded = true
+      if (this.state && TERMINAL[this.state]) return
+      var self = this
+      var pending = this._pending
+      if (pending) {
+        this._set(pending.state, pending.extra)
+        return
+      }
+      var announced = this._streamTerminal
+      if (!announced) return
+      // The stream carries no note or reason: read them once before settling.
+      api('GET', '/_cb/events/' + encodeURIComponent(String(this.id))).then(function (r) {
+        var j = r.status === 200 && r.json && typeof r.json.state === 'string' ? r.json : null
+        self._set(j && TERMINAL[j.state] ? j.state : /** @type {string} */ (announced), j || undefined)
+      }, function () {
+        self._set(/** @type {string} */ (announced))
+      })
+    }
+
     _poll () {
       var self = this
       var delay = config.pollMinMs
@@ -350,7 +397,7 @@
           if (r.status === 200 && r.json && typeof r.json.state === 'string') {
             failures = 0
             if (r.json.state !== self.state) delay = config.pollMinMs
-            self._set(r.json.state, r.json)
+            self._finish(r.json.state, r.json)
           } else {
             failures++
           }
@@ -378,8 +425,9 @@
         this._stream = es
         es.addEventListener('text', function (m) { onFrame(self, 'text', m.data) })
         es.addEventListener('state', function (m) { onFrame(self, 'state', m.data) })
-        es.addEventListener('end', function () { es.close() })
-        es.onerror = function () { es.close() } // never auto-reconnect: it would replay the text
+        es.addEventListener('end', function () { es.close(); self._streamClosed() })
+        // Never auto-reconnect: it would replay the text.
+        es.onerror = function () { es.close(); self._streamClosed() }
         return this
       }
       if (e.endpoint === null) return this
@@ -394,14 +442,14 @@
         cache: 'no-store',
         signal: ctl ? ctl.signal : undefined
       }).then(function (res) {
-        if (res.status !== 200 || !res.body) return
+        if (res.status !== 200 || !res.body) { self._streamClosed(); return }
         var reader = res.body.getReader()
         var dec = new TextDecoder()
         var buf = ''
         /** @returns {Promise<void>} */
         function pump () {
           return reader.read().then(function (r) {
-            if (r.done) return
+            if (r.done) { self._streamClosed(); return }
             buf += dec.decode(r.value, { stream: true }).replace(/\r\n?/g, '\n')
             var i
             while ((i = buf.indexOf('\n\n')) >= 0) {
@@ -414,13 +462,13 @@
                 if (line.indexOf('event:') === 0) name = line.slice(6).trim()
                 else if (line.indexOf('data:') === 0) data.push(line.slice(5).replace(/^ /, ''))
               })
-              if (data.length && onFrame(self, name, data.join('\n'))) { closable.close(); return }
+              if (data.length && onFrame(self, name, data.join('\n'))) { closable.close(); self._streamClosed(); return }
             }
             return pump()
           })
         }
         return pump()
-      }).catch(function () {})
+      }).catch(function () { self._streamClosed() })
       return this
     }
   }
@@ -434,7 +482,7 @@
     var obj
     try { obj = JSON.parse(data) } catch (err) { return false }
     if (name === 'text' && typeof obj.text === 'string') h._emit('text', obj.text)
-    else if (name === 'state' && typeof obj.state === 'string') h._set(obj.state)
+    else if (name === 'state' && typeof obj.state === 'string') h._streamState(obj.state)
     else if (name === 'end') return true
     return false
   }

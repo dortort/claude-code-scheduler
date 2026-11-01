@@ -215,6 +215,14 @@ or the sidecar's own `dropped` record) it drains the file once more, sends
 `event: state` with that state unless the file's last state frame already said so, then
 `event: end`, and closes. No `CB_STREAM_DIR` (or no file yet) just means no text frames.
 
+Ordering: the mod writes an event's stream file (with its last text, the terminal
+`state` and `end`) before the status.json that marks the event terminal, so the
+listener's final drain always sees the whole reply. In the client, while a handle's reply
+stream is open, a terminal state seen by polling or by a `state` frame is applied only
+when the stream ends (`end`, an error or a close), and a terminal state announced by the
+stream is applied with the `note`/`reason` of one more `GET /_cb/events/<id>`; so
+`ev.done` never resolves before the reply's last `text` has been emitted.
+
 ## Browser client (sidecar/client.js)
 
 Same-origin pages (served under `/a/`) need nothing but the script tag. file:// pages in
