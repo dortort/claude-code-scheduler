@@ -1,6 +1,6 @@
 {
   "name": "@dortort/scheduler",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Claude Code plugin for scheduling recurring and one-time AI-assisted tasks using native OS schedulers",
   "type": "module",
   "main": "dist/index.js",
@@ -15,9 +15,12 @@
     "lint": "eslint src/",
     "sync-version": "node scripts/sync-plugin-version.mjs",
     "version": "npm run sync-version && git add .claude-plugin/plugin.json",
-    "prepublishOnly": "npm run build"
+    "check-version": "node scripts/sync-plugin-version.mjs --check",
+    "test:package": "node scripts/check-package.mjs",
+    "prepack": "npm run check-version && npm run build"
   },
   "files": [
+    "npm-shrinkwrap.json",
     "dist",
     ".claude-plugin",
     "commands",
