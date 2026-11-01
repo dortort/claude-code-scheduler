@@ -30,6 +30,7 @@ type Res = ServerResponse
 
 const STREAM_POLL_MS = 250
 const OWN_RECORD_CAP = 1000
+const TOO_LARGE_LINGER_MS = 1000
 
 // ---------------------------------------------------------------------------
 // stdout
@@ -336,6 +337,24 @@ function start (cfg: CheckedConfig): void {
     })
   }
 
+  /**
+   * 413 for a body over the limit, without draining the rest of it: stop
+   * reading the socket, write a bare 413 with Connection: close straight to it
+   * and half-close it, then destroy it after TOO_LARGE_LINGER_MS. (Answering
+   * through `res` would either let Node drain the body or, with Connection:
+   * close, destroy the socket at once, and the reset that unread data causes
+   * can discard the 413 before the client reads it.)
+   */
+  function tooLarge (req: Req, _res: Res, path: string): void {
+    const socket = req.socket
+    req.pause()
+    socket.pause()
+    emit(rejectedLine(req, path, 'too-large'))
+    socket.end('HTTP/1.1 413 Payload Too Large\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n' +
+      'Referrer-Policy: same-origin\r\nContent-Length: 0\r\nConnection: close\r\n\r\n')
+    setTimeout(() => socket.destroy(), TOO_LARGE_LINGER_MS).unref()
+  }
+
   function dropOrAccept (res: Res, value: EventBody, page: string): void {
     const now = Date.now()
     const status = readStatus()
@@ -376,10 +395,10 @@ function start (cfg: CheckedConfig): void {
     }
     // e. Size
     const declared = h['content-length']
-    if (declared !== undefined && Number(declared) > MAX_BODY_BYTES) return reject(req, res, path, 'too-large', 413)
+    if (declared !== undefined && Number(declared) > MAX_BODY_BYTES) return tooLarge(req, res, path)
     const got = await readBody(req)
     if ('aborted' in got) return
-    if ('tooLarge' in got) return reject(req, res, path, 'too-large', 413)
+    if ('tooLarge' in got) return tooLarge(req, res, path)
     // f. Schema
     let parsed: unknown
     let parseError = false

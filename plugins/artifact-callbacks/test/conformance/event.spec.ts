@@ -3,6 +3,7 @@ import { test, describe, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { rmSync } from 'node:fs'
 import { join } from 'node:path'
+import net from 'node:net'
 import { startListener, assertBaseHeaders, EVENT_ID, request, sleep, rawSocket } from './harness.ts'
 import type { Listener, Line, Response, Headers } from './harness.ts'
 
@@ -168,6 +169,46 @@ describe('rejections in check order', () => {
     })
     await expectRejected(L, r, 413, 'too-large')
   })
+
+  for (const framing of ['chunked', 'content-length'] as const) {
+    test(`e. after a 413 the listener stops reading and closes the connection (${framing})`, async () => {
+      // An endless authenticated upload: before the fix Node drained it until the 10 s
+      // request timeout (gigabytes per connection).
+      // allowHalfOpen: the client ignores the listener's FIN and keeps sending.
+      const socket = net.connect({ port: L.port, host: '127.0.0.1', allowHalfOpen: true })
+      await new Promise<void>((resolve, reject) => { socket.once('connect', resolve); socket.once('error', reject) })
+      let response = ''
+      socket.setEncoding('utf8')
+      socket.on('data', (d: string) => { response += d })
+      socket.on('error', () => {})
+      const closed = new Promise<number>((resolve) => socket.once('close', () => resolve(Date.now())))
+      socket.write(`POST /_cb/event HTTP/1.1\r\nHost: 127.0.0.1:${L.port}\r\nOrigin: ${L.origin}\r\n` +
+        `Content-Type: application/json\r\nCookie: ${L.cookieName}=${L.cookieValue}\r\nReferer: ${L.origin}/a/p.html\r\n` +
+        (framing === 'chunked' ? 'Transfer-Encoding: chunked\r\n' : `Content-Length: ${1024 ** 4}\r\n`) + '\r\n')
+      const piece = Buffer.alloc(64 * 1024, 'y')
+      const chunk = framing === 'chunked' ? Buffer.concat([Buffer.from(piece.length.toString(16) + '\r\n'), piece, Buffer.from('\r\n')]) : piece
+      const started = Date.now()
+      let sent = 0
+      let isClosed = false
+      void closed.then(() => { isClosed = true })
+      // Write as fast as the socket takes it, for at most 4 s.
+      while (!isClosed && !socket.destroyed && Date.now() - started < 4000) {
+        if (!socket.write(chunk)) {
+          await Promise.race([new Promise((r) => socket.once('drain', r)), closed, sleep(100)])
+        } else {
+          sent += chunk.length
+          if (sent % (4 * 1024 * 1024) < chunk.length) await sleep(0)
+        }
+      }
+      const closedAt = await Promise.race([closed, sleep(1000).then(() => Infinity)])
+      socket.destroy()
+      assert.match(response, /^HTTP\/1\.1 413 /, 'the client still gets the 413')
+      assert.match(response, /\r\nconnection: close\r\n/i)
+      assert.ok(closedAt - started < 3000, `connection closed within 3 s (took ${closedAt - started} ms)`)
+      assert.ok(sent < 64 * 1024 * 1024, `the listener took at most 64 MB before closing (took ${Math.round(sent / 1024 / 1024)} MB)`)
+      await expectRejected(L, { status: 413, headers: { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'same-origin' }, body: '', json: undefined }, 413, 'too-large')
+    })
+  }
 
   test('e. exactly 16384 bytes is accepted', async () => {
     const base = JSON.stringify({ v: 1, action: 'x', data: { pad: '' } })
