@@ -171,6 +171,9 @@ d. **Auth**: cookie mode: `cb_session_<port>` cookie must equal the cookie value
    Token-mode `body.page` may be `/a/<page>`, `/<page>`, `<page>`, or an absolute file path
    inside `CB_ROOT` (as given or its realpath), which is made relative.
 e. **Size**: body over 16384 bytes → `413` `rejected/too-large` (stop reading; don't buffer more).
+   The `413` carries `Connection: close`; the listener reads no more of the request, half-closes
+   the connection after the answer and destroys it 1 s later at most, so an oversized upload is
+   never drained.
 f. **Schema**: JSON object; `v` === 1; `action` matches `^[a-z0-9_-]{1,40}$`; `label`
    optional string ≤ 200 chars; `data` optional JSON object (default `{}`); `prompt`
    optional string ≤ 2000 chars; `idempotencyKey` optional string ≤ 100 chars; `page`
