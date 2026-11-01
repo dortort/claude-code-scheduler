@@ -34,13 +34,6 @@
       "description": "Accept events from pages opened straight from disk, authenticated by a per-page token",
       "default": false
     },
-    "runtime": {
-      "type": "string",
-      "title": "Listener runtime",
-      "description": "auto tries node, then python3",
-      "default": "auto",
-      "options": ["auto", "node", "python3"]
-    },
     "maxPromptChars": {
       "type": "number",
       "title": "Max prompt length",

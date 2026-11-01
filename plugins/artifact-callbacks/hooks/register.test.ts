@@ -76,7 +76,8 @@ describe('session start', () => {
     await start($, kit)
     expect(kit.sidecars).toHaveLength(1)
     const sidecar = kit.sidecar()
-    expect(sidecar.argv).toEqual(['node', expect.stringMatching(/\/sidecar\/listener\.mjs$/)])
+    expect(sidecar.argv).toEqual(['node', expect.stringMatching(/\/sidecar\/listener\.ts$/)])
+    expect(kit.runs).toContainEqual(['node', '--version'])
     expect(sidecar.cwd).toBe(CWD)
     expect(sidecar.env).toEqual({
       CB_PORT: '0',
@@ -184,45 +185,71 @@ describe('session start', () => {
   })
 })
 
-describe('runtime selection', () => {
-  test('auto falls back to python3', async ($, on) => {
-    const kit = engine(on, { runtimes: { node: false, python3: true } })
+const DOWN_CASES: Array<[string, NonNullable<Parameters<typeof engine>[1]>['node'], string]> = [
+  ['node is not on PATH', null, 'node-missing: no node on PATH, need Node >= 22.18.0'],
+  ['node --version fails', { exitCode: 1, stdout: '' }, 'node-missing: no node on PATH, need Node >= 22.18.0'],
+  ['node 18 is too old', 'v18.20.4', 'node-too-old: found Node v18.20.4, need >= 22.18.0'],
+  ['node 22.17.9 is too old', 'v22.17.9', 'node-too-old: found Node v22.17.9, need >= 22.18.0'],
+  ['garbage version output', 'Segmentation fault', 'node-missing: `node --version` printed "Segmentation fault", need Node >= 22.18.0'],
+]
+
+describe('node check', () => {
+  for (const [name, node, reason] of DOWN_CASES) {
+    test(`${name}: the listener stays down and says why`, async ($, on) => {
+      const kit = engine(on, { node })
+      await start($, kit)
+      expect(kit.runs).toContainEqual(['node', '--version'])
+      expect(kit.sidecars).toHaveLength(0)
+      expect(kit.lastStatus()).toBe(`callbacks down: ${reason}`)
+      expect(await sectionIds($)).toEqual(['intro'])
+      expect(await command($, kit, '')).toContain(`Listener: down: ${reason}`)
+      expect(await command($, kit, 'open triage')).toContain(`The listener is down (${reason})`)
+    })
+  }
+
+  test('node 22.18.0 exactly starts the TypeScript listener', async ($, on) => {
+    const kit = engine(on, { node: 'v22.18.0' })
     await start($, kit)
-    expect(kit.sidecar().argv).toEqual(['python3', expect.stringMatching(/\/sidecar\/listener\.py$/)])
-    expect(await command($, kit, '')).toContain('python3')
+    expect(kit.sidecar().argv).toEqual(['node', expect.stringMatching(/\/sidecar\/listener\.ts$/)])
+    expect(kit.lastStatus()).toBe('callbacks :51234 · 0 queued')
+    expect(await command($, kit, '')).toContain('Listener: up at http://127.0.0.1:51234/ (pid 4401, node v22.18.0)')
   })
 
-  test('Windows uses the py launcher and its own commands', async ($, on) => {
-    const kit = engine(on, { runtimes: { node: false, py: true }, uname: 'Windows' })
+  test('node 24 starts the listener and names its version', async ($, on) => {
+    const kit = engine(on, { node: 'v24.3.0' })
     await start($, kit)
-    expect(kit.sidecar().argv).toEqual(['py', '-3', expect.stringMatching(/\/sidecar\/listener\.py$/)])
+    expect(kit.sidecars).toHaveLength(1)
+    expect(await command($, kit, '')).toContain('(pid 4401, node v24.3.0)')
+  })
+
+  test('/callbacks start checks node again once it is installed', async ($, on) => {
+    const kit = engine(on, { node: 'v20.11.1' })
+    await start($, kit)
+    expect(kit.sidecars).toHaveLength(0)
+    kit.setNode('v22.18.0')
+    expect(await command($, kit, 'start')).toBe('Listener up at http://127.0.0.1:51234/')
+    expect(kit.sidecar().argv[1]).toMatch(/\/sidecar\/listener\.ts$/)
+    expect(await sectionText($)).toContain(':51234/')
+  })
+
+  test('a stale runtime option is ignored and only node is probed', { options: { runtime: 'auto' } }, async ($, on) => {
+    const kit = engine(on)
+    await start($, kit)
+    expect(kit.sidecar().argv[0]).toBe('node')
+    expect(kit.runs.filter(r => r[0] !== 'uname' && r[0] !== 'mkdir' && r[0] !== 'mv').map(r => r[0])).toEqual(['node'])
+    expect(configFrom({ runtime: 'auto' })).not.toHaveProperty('runtime')
+  })
+})
+
+describe('windows', () => {
+  test('Windows uses cmd for the status file, folders and /callbacks open', async ($, on) => {
+    const kit = engine(on, { uname: 'Windows' })
+    await start($, kit)
+    expect(kit.sidecar().argv).toEqual(['node', expect.stringMatching(/\/sidecar\/listener\.ts$/)])
     expect(kit.runs).toContainEqual(['cmd', '/c', 'move', '/y', `${STATUS}.tmp`.replace(/\//g, '\\'), STATUS.replace(/\//g, '\\')])
     expect(await command($, kit, 'open triage')).toBe('Opened http://127.0.0.1:51234/a/triage.html')
     expect(kit.runs).toContainEqual(['cmd', '/c', 'start', '""', 'http://127.0.0.1:51234/a/triage.html'])
-  })
-
-  test('with neither runtime the listener stays down and says why', async ($, on) => {
-    const kit = engine(on, { runtimes: { node: false, python3: false } })
-    await start($, kit)
-    expect(kit.sidecars).toHaveLength(0)
-    expect(kit.lastStatus()).toBe('callbacks down: neither node nor python3 found')
-    expect(await sectionIds($)).toEqual(['intro'])
-    expect(await command($, kit, '')).toContain('Listener: down: neither node nor python3 found')
-    expect(await command($, kit, 'open triage')).toContain('The listener is down (neither node nor python3 found)')
-  })
-
-  test('runtime "node" never tries python3', { options: { runtime: 'node' } }, async ($, on) => {
-    const kit = engine(on, { runtimes: { node: false, python3: true } })
-    await start($, kit)
-    expect(kit.sidecars).toHaveLength(0)
-    expect(kit.lastStatus()).toBe('callbacks down: node not found (runtime option is "node")')
-  })
-
-  test('runtime "python3" skips node', { options: { runtime: 'python3' } }, async ($, on) => {
-    const kit = engine(on)
-    await start($, kit)
-    expect(kit.sidecar().argv[0]).toBe('python3')
-    expect(kit.runs.some(r => r[0] === 'node')).toBe(false)
+    expect(kit.runs.some(r => r[0] === 'xdg-open' || r[0] === 'open')).toBe(false)
   })
 })
 
@@ -676,7 +703,7 @@ describe('supervision', () => {
         },
       ],
       trusted: ['triage.html'],
-      listener: { state: 'up', port: 47000, pid: 99, reason: null, restarts: 1, runtime: 'node' },
+      listener: { state: 'up', port: 47000, pid: 99, reason: null, restarts: 1, runtime: 'node' } /* a snapshot from a build that had a runtime option */,
       paused: false,
       queue: [{ id: 'ev_waiting000', page: 'other.html', action: 'go', dataKey: '{}', text: 'go', context: 'c', receivedAt: T0 - 1000 }],
       session: {
@@ -704,7 +731,7 @@ describe('supervision', () => {
   test('a reload of a stopped listener keeps it stopped', async ($, on) => {
     const kit = engine(on)
     const prior: Record<string, unknown> = {
-      listener: { state: 'stopped', port: 47000, pid: null, reason: null, restarts: 0, runtime: 'node' },
+      listener: { state: 'stopped', port: 47000, pid: null, reason: null, restarts: 0, nodeVersion: 'v22.18.0' },
       session: {
         cwd: CWD, runDir: RUN, artifactsDir: ARTIFACTS, statusFile: STATUS, streamDir: `${RUN}/streams`, platform: 'linux',
         secret: 'cd'.repeat(32),
@@ -725,7 +752,7 @@ describe('/callbacks', () => {
     kit.files.set(`${ARTIFACTS}/notes.txt`, 'x')
     await start($, kit)
     const report = await command($, kit, '')
-    expect(report).toContain('Listener: up at http://127.0.0.1:51234/ (pid 4401, node)')
+    expect(report).toContain('Listener: up at http://127.0.0.1:51234/ (pid 4401, node v22.18.0)')
     expect(report).toContain('http://127.0.0.1:51234/a/sub/deep.html')
     expect(report).toContain('http://127.0.0.1:51234/a/triage.html')
     expect(report).not.toContain('notes.txt')
@@ -861,7 +888,6 @@ describe('config', () => {
   test('options become a config with defaults', () => {
     expect(configFrom({})).toEqual({
       policy: 'first-per-page',
-      runtime: 'auto',
       port: 0,
       maxPromptChars: 4000,
       autoStart: true,

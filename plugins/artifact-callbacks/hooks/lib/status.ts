@@ -111,7 +111,7 @@ export function statusReport(input: {
   const { listener } = input
   const lines: string[] = []
   if (listener.state === 'up' && listener.port !== null) {
-    lines.push(`Listener: up at http://127.0.0.1:${listener.port}/ (pid ${listener.pid ?? '?'}, ${listener.runtime ?? 'unknown runtime'})`)
+    lines.push(`Listener: up at http://127.0.0.1:${listener.port}/ (pid ${listener.pid ?? '?'}, node ${listener.nodeVersion ?? '?'})`)
   } else if (listener.state === 'down' || listener.state === 'off') {
     lines.push(`Listener: ${listener.state}${listener.reason ? `: ${listener.reason}` : ''}`)
   } else {
