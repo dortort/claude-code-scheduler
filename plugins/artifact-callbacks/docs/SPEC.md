@@ -41,6 +41,8 @@ The mod is a hooks module plus a small sidecar process, because a hooks module h
 
 &#91;embedded content: Artifact Callbacks · components and data flow\]
 
+**Language and runtime.** Everything that runs in Node is TypeScript: the hooks module, the sidecar and the tests. The sidecar needs Node 22.18 or later, which runs `.ts` files directly (erasable syntax only), so nothing is compiled or built. `client.js` stays JavaScript because browsers cannot run TypeScript; it is type-checked with `tsc --checkJs`. There is no Python fallback: one listener keeps the security-critical checks in one implementation.
+
 The browser only ever talks to the sidecar. The sidecar never touches the session; it reports events on stdout and reads state the mod writes.
 
 **Components**
@@ -48,7 +50,7 @@ The browser only ever talks to the sidecar. The sidecar never touches the sessio
 | Component | Runs as | Responsibility |
 | --- | --- | --- |
 | `hooks/register.tsx` | Mod hooks module | Lifecycle, policy, prompt construction, status tracking, `/callbacks` command, system-prompt section |
-| `sidecar/listener.mjs` (Node) or `sidecar/listener.py` (Python 3 stdlib) | Child process via `$.process.spawn` | HTTP on loopback, request checks, static serving of the artifacts folder, `client.js`, NDJSON on stdout |
+| `sidecar/listener.ts` (TypeScript, Node >= 22.18 stdlib, run directly through Node's type stripping) | Child process via `$.process.spawn` | HTTP on loopback, request checks, static serving of the artifacts folder, `client.js`, NDJSON on stdout |
 | `sidecar/client.js` | Served at `/_cb/client.js` | `data-cb-action` wiring, `ArtifactCallbacks.send()`, status polling, small toast in the page |
 | `skills/interactive-artifacts/SKILL.md` | Skill | Longer authoring guide Claude loads when building a page |
 | `<run dir>/status.json` | File | Event states keyed by event id, written by the mod, read by the sidecar per request |
@@ -161,7 +163,7 @@ export const register: Register = (on, options) => {
     const secret = crypto.randomUUID()
     void (async () => {
       const child = $.process.spawn({
-        argv: await pickRuntime($),     // ['node', `${root}/sidecar/listener.mjs`] or python3
+        argv: await pickRuntime($),     // ['node', `${root}/sidecar/listener.ts`] once node >= 22.18 is found
         env: { CB_PORT: String(options.port ?? 0), CB_ROOT: artifactsDir(e.cwd),
                CB_STATUS_FILE: statusPath, CB_SECRET: secret },
       })
@@ -282,8 +284,7 @@ artifact-callbacks/
   hooks/register.tsx              lifecycle, queue, policy, compose section, command
   hooks/register.test.ts          claude plugin test: submit, queue, confirm, restart
   types/index.d.ts                PluginState: events, trusted pages, listener status
-  sidecar/listener.mjs            Node listener (preferred)
-  sidecar/listener.py             Python 3 stdlib listener (fallback)
+  sidecar/listener.ts             Node >= 22.18 listener, TypeScript run without a build step
   sidecar/client.js               served at /_cb/client.js
   skills/interactive-artifacts/SKILL.md
 ```
@@ -296,7 +297,6 @@ artifact-callbacks/
 | `confirm` | `first-per-page` / `always` / `never` | `first-per-page` | See Session injection |
 | `artifactsDir` | path | `.claude/artifacts` | Relative to the session's working directory |
 | `allowFileOrigin` | boolean | `false` | Enables token mode for file:// pages |
-| `runtime` | `auto` / `node` / `python3` | `auto` | `auto` tries `node --version`, then `python3 --version` via `$.process.run` |
 | `maxPromptChars` | number | `4000` | Cap on the rendered prompt |
 | `autoStart` | boolean | `true` | Off: listener starts on `/callbacks start` |
 
@@ -321,7 +321,7 @@ artifact-callbacks/
 
 | Case | Behaviour |
 | --- | --- |
-| Neither Node nor Python 3 on the machine | Listener stays down; status line and `/callbacks` say why; compose section is not added |
+| Node missing, or older than 22.18 | Listener stays down; status line and `/callbacks` say why (found version and the minimum); compose section is not added |
 | Sidecar crashes | Restart with backoff 1 s, 5 s, 30 s; after 3 failures stay down and toast once. Port is kept if still free, so open tabs keep working |
 | Mod hot-reloads mid-session | Module variables reset, child is killed and respawned; event records survive in `$.state`; an event that was `running` is marked `done` with `note: "reload"` |
 | User runs `/clear` | Listener and trust persist; queued events still run in the cleared conversation |
@@ -337,14 +337,14 @@ artifact-callbacks/
 - Published claude.ai artifacts: could the Artifact runtime's "ask Claude" capability carry events back to the originating Claude Code session instead of loopback? That would cover remote and cloud sessions.
 - Should Claude's reply stream back to the page (server-sent events from `/_cb/events/<id>/stream`, fed by `turn.step`) in v2?
 - Is `first-per-page` the right default, or should pages Claude wrote in this session be trusted with no confirmation?
-- Windows: `start` for `/callbacks open`, Python launcher `py`, and whether `SameSite=Strict` behaves the same in Edge for `127.0.0.1`.
+- Windows: `start` for `/callbacks open`, and whether `SameSite=Strict` behaves the same in Edge for `127.0.0.1`.
 
 **Milestones**
 
 1. **M1, walking skeleton:** Node sidecar, `/a/` serving, cookie and Host/Origin checks, `$.prompt.submit` with the default template, `/callbacks` status. Tests for submit and rejection paths.
 2. **M2, safe by default:** confirm band, mod-side queue with caps and coalescing, status file and polling, `data-cb-state`, restart supervision.
 3. **M3, Claude-ready:** compose section, `interactive-artifacts` skill, `data-cb-prompt` templates with on-disk verification, `/callbacks open`.
-4. **M4, breadth:** Python fallback, file:// token mode, Windows support, marketplace listing.
+4. **M4, breadth:** file:// token mode, Windows support, marketplace listing.
 5. **M5, optional:** channel adapter build for users on the research-preview channels path; reply streaming.
 
 Sources: [Channels](https://code.claude.com/docs/en/channels) · [Channels reference](https://code.claude.com/docs/en/channels-reference) · [Hooks](https://code.claude.com/docs/en/hooks) · [Plugin components](https://code.claude.com/docs/en/plugins/components) · [Tools reference: Monitor](https://code.claude.com/docs/en/tools-reference#monitor-tool) · [Agent SDK streaming input](https://code.claude.com/docs/en/agent-sdk/streaming-vs-single-mode) · Mod API: the `claude-code` type declarations bundled with Claude Code 2.1.296 (`$.process.spawn`, `$.prompt.submit`, `prompt.compose`, `$.fs`).
