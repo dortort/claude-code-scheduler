@@ -22,6 +22,11 @@
         "source": "github",
         "repo": "dortort/skills"
       }
+    },
+    {
+      "name": "artifact-callbacks",
+      "description": "Turn clicks on HTML pages Claude writes into follow-up prompts in the running session, through a loopback-only listener",
+      "source": "./plugins/artifact-callbacks"
     }
   ]
 }
