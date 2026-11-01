@@ -337,7 +337,7 @@ describe('wire types', () => {
       { type: 'ready', port: 51234, pid: 4411 },
       { type: 'event', id: 'ev_8f3k2a0000', receivedAt: 1, servedPage: 'p.html', body: { v: 1, action: 'fix', data: {}, page: 'p.html' } },
       { type: 'rejected', reason: 'origin', origin: 'https://evil.example', path: '/_cb/event' },
-      { type: 'dropped', id: 'ev_8f3k2a0000', reason: 'paused', servedPage: 'p.html' },
+      { type: 'dropped', id: 'ev_8f3k2a0000', reason: 'paused', servedPage: 'p.html', action: 'fix', label: 'Fix this' },
       { type: 'error', reason: 'port-in-use', message: 'port 1 is already in use' }
     ]
     assert.deepEqual(lines.map((l) => l.type), ['ready', 'event', 'rejected', 'dropped', 'error'])

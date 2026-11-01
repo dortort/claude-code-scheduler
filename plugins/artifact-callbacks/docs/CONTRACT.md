@@ -75,7 +75,7 @@ only the second check fires there).
 {"type":"ready","port":51234,"pid":4411}
 {"type":"event","id":"ev_8f3k2a","receivedAt":1791821731946,"servedPage":"triage.html","body":{...validated body, page overwritten...}}
 {"type":"rejected","reason":"origin","origin":"https://evil.example","path":"/_cb/event"}
-{"type":"dropped","id":"ev_...","reason":"paused|queue-full|rate-limit","servedPage":"triage.html"}
+{"type":"dropped","id":"ev_...","reason":"paused|queue-full|rate-limit","servedPage":"triage.html","action":"fix","label":"Fix this"}
 {"type":"error","reason":"port-in-use|root-missing|bad-config","message":"..."}
 ```
 
@@ -84,6 +84,8 @@ only the second check fires there).
 Every `rejected` line carries `path` (request path without the query) and carries
 `origin` exactly when the request had an `Origin` header. `method` is emitted for a
 `405` and for a refused `OPTIONS`. `404`s (unknown routes, refused `/a/` paths) emit nothing.
+Every `dropped` line carries the validated body's `action`, and `label` exactly when the
+body had one, so `/callbacks` can name the control whose click was dropped.
 On `error` the process exits non-zero (exit code 2 for `port-in-use`, 1 otherwise),
 and prints nothing else; `ready` is never printed in that case.
 

@@ -17,7 +17,7 @@ export type EventLine = {
   }
 }
 export type RejectedLine = { type: 'rejected'; reason: string; origin?: string; path?: string }
-export type DroppedLine = { type: 'dropped'; id: string; reason: string; servedPage?: string }
+export type DroppedLine = { type: 'dropped'; id: string; reason: string; servedPage?: string; action?: string; label?: string }
 export type ErrorLine = { type: 'error'; reason: string; message?: string }
 export type SidecarLine = ReadyLine | EventLine | RejectedLine | DroppedLine | ErrorLine
 
@@ -91,6 +91,8 @@ export function parseLine(line: string): SidecarLine | undefined {
         id: v.id,
         reason: typeof v.reason === 'string' ? v.reason : 'unknown',
         ...(typeof v.servedPage === 'string' ? { servedPage: v.servedPage } : {}),
+        ...(typeof v.action === 'string' && ACTION.test(v.action) ? { action: v.action } : {}),
+        ...(typeof v.label === 'string' ? { label: v.label.slice(0, 200) } : {}),
       }
     case 'error':
       return {

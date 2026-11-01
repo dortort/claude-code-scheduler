@@ -414,6 +414,15 @@ describe('ndjson', () => {
       reason: 'paused',
       servedPage: 't.html',
     })
+    expect(
+      parseLine('{"type":"dropped","id":"ev_aaaaaaaaaa","reason":"paused","servedPage":"t.html","action":"fix","label":"Fix this"}'),
+    ).toEqual({ type: 'dropped', id: 'ev_aaaaaaaaaa', reason: 'paused', servedPage: 't.html', action: 'fix', label: 'Fix this' })
+    // An action outside the wire grammar is left out rather than shown.
+    expect(parseLine('{"type":"dropped","id":"ev_aaaaaaaaaa","reason":"paused","action":"Bad Action"}')).toEqual({
+      type: 'dropped',
+      id: 'ev_aaaaaaaaaa',
+      reason: 'paused',
+    })
     expect(parseLine('{"type":"error","reason":"port-in-use","message":"busy"}')).toEqual({
       type: 'error',
       reason: 'port-in-use',
