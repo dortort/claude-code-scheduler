@@ -42,6 +42,13 @@ ever sent on it. Configuration is environment only:
 | `CB_ALLOW_FILE_ORIGIN` | `1` enables file:// token mode. Default off. |
 | `CB_STREAM_DIR` | Optional (M5). Folder holding `<event id>.ndjson` reply-stream files written by the mod. |
 | `CB_CLIENT_JS` | Optional override path of client.js (tests). Default: `client.js` beside the listener. |
+| `CB_REQUEST_TIMEOUT_MS` | Optional test override of the 10 s request timeout (headers and body). |
+| `CB_STREAM_PING_MS` | Optional test override of the 15 s SSE `: ping` interval. |
+
+`CB_SECRET` must match `^[0-9a-fA-F]{32,}$`; HMAC keys are the UTF-8 bytes of the
+string as given (not hex-decoded). `CB_PORT`, `CB_ROOT`, `CB_STATUS_FILE`, `CB_STREAM_DIR`
+must be absolute paths / integers; violations are `error/bad-config` (exit 1). A
+missing or non-directory `CB_ROOT` is `error/root-missing` (exit 1).
 
 Lifetime: binds `127.0.0.1` only (never `0.0.0.0`/`::`). Exits on SIGTERM/SIGINT,
 when writing to stdout fails (EPIPE), and when its parent process goes away
@@ -59,7 +66,11 @@ when writing to stdout fails (EPIPE), and when its parent process goes away
 
 `rejected.reason` is one of `host`, `origin`, `sec-fetch-site`, `content-type`,
 `auth`, `page`, `body`, `too-large`, `template-changed`, `method`.
-On `error` the process exits non-zero (exit code 2 for `port-in-use`).
+Every `rejected` line carries `path` (request path without the query) and carries
+`origin` exactly when the request had an `Origin` header. `method` is emitted for a
+`405` and for a refused `OPTIONS`. `404`s (unknown routes, refused `/a/` paths) emit nothing.
+On `error` the process exits non-zero (exit code 2 for `port-in-use`, 1 otherwise),
+and prints nothing else; `ready` is never printed in that case.
 
 Event ids: `ev_` + 10 chars of `[a-z0-9]`, from a CSPRNG.
 
@@ -89,23 +100,39 @@ Checks run in this order; the first failure answers.
 
 1. **Host** (every route, every method): must be exactly `127.0.0.1:<port>` or
    `localhost:<port>`. Else `403`, empty body, stdout `rejected/host`.
-2. Unknown route: `404` empty body. Wrong method on a known route: `405` empty body.
-   `OPTIONS` anything: `403` empty body, never any `Access-Control-*` header.
-3. No response ever carries `Access-Control-Allow-Origin`.
+   A missing Host is also `403`.
+2. Unknown route: `404` empty body. Wrong method on a known route (including `HEAD`):
+   `405` empty body with `Allow`. `OPTIONS` anything: `403` empty body, never any
+   `Access-Control-*` header. **Only exception (token mode):** when
+   `CB_ALLOW_FILE_ORIGIN=1`, an `OPTIONS` with `Origin: null` on `/_cb/event` or
+   `/_cb/events/<id>[/stream]` is a CORS preflight answered `204` with
+   `Access-Control-Allow-Origin: null`, `Access-Control-Allow-Methods: GET, POST`,
+   `Access-Control-Allow-Headers: content-type, x-cb-token`, `Access-Control-Max-Age: 600`,
+   and `Access-Control-Allow-Private-Network: true` when the preflight asked for it.
+3. No response ever carries `Access-Control-Allow-Origin`, except token-mode responses
+   (`Origin: null`, `CB_ALLOW_FILE_ORIGIN=1`) **after** the token has been verified,
+   which carry `Access-Control-Allow-Origin: null` and `Vary: Origin` (never
+   `Allow-Credentials`). Without this a file:// page can neither send `X-CB-Token`
+   (the header forces a preflight) nor read the event id, so token mode could not work.
+   Unauthenticated callers still get no CORS headers and learn nothing.
 4. Every response: `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`,
    `Referrer-Policy: same-origin`. Failed requests get a bare status with no body
    unless stated below.
-5. Request timeout 10 s (headers and body).
+5. Request timeout 10 s (headers and body): the connection is closed (a bare `408` may be
+   written first). It does not apply to a response in progress such as an SSE stream.
+   A malformed request gets a bare `400` with the headers above and is closed.
 
 | Route | Behaviour |
 | --- | --- |
 | `GET /_cb/health` | `200 {"ok":true,"paused":<from status.json>}` |
 | `GET /_cb/client.js` | `200`, `text/javascript; charset=utf-8`, the client file. No secrets in it. |
-| `GET /a/<path>` | Serve a regular file from `CB_ROOT`. URL-decoded path; reject `..` segments, NUL, backslashes, dotfile segments (`/.x`). `realpath` must be inside `realpath(CB_ROOT)` (symlinks pointing out → 404). Directories → 404 (no listings, no index). MIME by extension (html, js, mjs, css, json, svg, png, jpg, jpeg, gif, webp, ico, txt, md, woff, woff2, map; else `application/octet-stream`). For `.html`: set `Set-Cookie: cb_session=<cookie>; HttpOnly; SameSite=Strict; Path=/` and record the page path (relative to root, `/`-separated, e.g. `triage.html`, `sub/x.html`) in the served-pages set. |
+| `GET /a/<path>` | Serve a regular file from `CB_ROOT`. URL-decoded path; reject `..` segments, NUL, backslashes (raw or `%5c`), empty segments, dotfile segments (`/.x`, also `.` and `..`), bad percent-encoding; every refusal is a bare `404`. `realpath` must be inside `realpath(CB_ROOT)` (symlinks pointing out → 404). Directories → 404 (no listings, no index). MIME by extension (html, js, mjs, css, json, svg, png, jpg, jpeg, gif, webp, ico, txt, md, woff, woff2, map; else `application/octet-stream`). For `.html` (extension compared case-insensitively): set `Set-Cookie: cb_session_<port>=<cookie>; HttpOnly; SameSite=Strict; Path=/` and record the page path (relative to root, `/`-separated, e.g. `triage.html`, `sub/x.html`) in the served-pages set. |
 | `POST /_cb/event` | See below. |
-| `GET /_cb/events/<id>` | Auth as for POST steps a–d (Origin only checked when present). `200 {"id","state","turnStartedAt"?, "turnEndedAt"?, "note"?}` from status.json, else from the sidecar's own record of ids it issued (queued/dropped), else `404`. |
+| `GET /_cb/events/<id>` | `<id>` must match `^ev_[a-z0-9]{10}$` (else `404`). Auth as for POST steps a, b and d (no content-type; Origin only checked when present). In token mode `X-CB-Token` must equal the page token of the event's `page` (status.json record, else the sidecar's own record). `200 {"id","state","turnStartedAt"?, "turnEndedAt"?, "note"?, "reason"?}` from status.json (only those keys, copied when present, `null` included), else from the sidecar's own record of ids it issued (`queued`, or `dropped` with `reason`), else `404`. Auth runs before the lookup. |
 | `GET /_cb/events/<id>/stream` | M5. Same auth. `text/event-stream`. See Streaming. |
 
+Cookie name: `cb_session_<port>` (deviation from the spec's `cb_session`: cookies are not
+port-scoped, so two sessions on `127.0.0.1` would otherwise overwrite each other's cookie).
 Cookie value: `HMAC-SHA256(key=CB_SECRET, msg=String(port))`, lowercase hex.
 Page token (file mode): `HMAC-SHA256(key=CB_SECRET, msg="page:" + <page path relative to root>)`, lowercase hex.
 Compare with constant-time equality.
@@ -117,28 +144,42 @@ a. **Origin**: header required. Allowed: `http://127.0.0.1:<port>`, `http://loca
 b. **Sec-Fetch-Site**: when present, must be `same-origin` (cookie mode). In token mode
    (`Origin: null`) it is not checked. Else `403` `rejected/sec-fetch-site`.
 c. **Content-Type**: must be `application/json` (parameters like `; charset=utf-8` allowed). Else `403` `rejected/content-type`.
-d. **Auth**: cookie mode: `cb_session` cookie must equal the cookie value. Token mode
+d. **Auth**: cookie mode: `cb_session_<port>` cookie must equal the cookie value. Token mode
    (`Origin: null`): `X-CB-Token` must equal the page token for `body.page` and that
-   page file must exist under root. Else `403` `rejected/auth`.
+   page file must exist under root. Else `403` `rejected/auth`. Token mode needs the body,
+   so here only the header's presence is checked; the token itself is verified right after
+   step e, before any schema error is reported (unparsable JSON in token mode is `auth`, not `body`).
+   Token-mode `body.page` may be `/a/<page>`, `/<page>`, `<page>`, or an absolute file path
+   inside `CB_ROOT` (as given or its realpath), which is made relative.
 e. **Size**: body over 16384 bytes → `413` `rejected/too-large` (stop reading; don't buffer more).
 f. **Schema**: JSON object; `v` === 1; `action` matches `^[a-z0-9_-]{1,40}$`; `label`
    optional string ≤ 200 chars; `data` optional JSON object (default `{}`); `prompt`
    optional string ≤ 2000 chars; `idempotencyKey` optional string ≤ 100 chars; `page`
    optional string ≤ 300. Unknown keys dropped. Else `400 {"error":"<what>"}` `rejected/body`.
-g. **Page**: cookie mode: the served page is the `Referer` path under `/a/` if it is in
+   Lengths count Unicode code points; `null` for an optional field counts as absent.
+   `<what>` starts with the offending field name (`v`, `action`, `label`, `data`, `prompt`,
+   `idempotencyKey`, `page`) or with `body` (not JSON / not an object).
+g. **Page**: cookie mode: the served page is the `Referer` path under `/a/` (only a Referer
+   whose origin is an allowed origin; percent-decoded and checked like `/a/`) if it is in
    the served-pages set, else `body.page` (strip a leading `/a/` or `/`) if it is in the
    set; else `403` `rejected/page`. The body's `page` is overwritten with it. Token mode:
    `page` = `body.page` as verified by the token.
 h. **Template**: when `prompt` is present, re-read the page file from disk, collect every
    `data-cb-prompt` attribute value (single-, double-quoted or unquoted, HTML entities
-   decoded: named `&amp; &lt; &gt; &quot; &#39; &apos;` and numeric `&#N; &#xH;`), and
-   require an exact match. Else `409 {"error":"template-changed"}` `rejected/template-changed`.
+   decoded: named `&amp; &lt; &gt; &quot; &#39; &apos;` and numeric `&#N; &#xH;`, each
+   with its `;`; other entities stay literal; numeric 0, surrogates and > 0x10FFFF stay
+   literal), and require an exact match. Attribute names match ASCII case-insensitively,
+   only inside start tags; comments, `<!…>`, `<?…>` and end tags are skipped; a bare
+   `data-cb-prompt` is the empty string. A missing page file also fails. Else `409 {"error":"template-changed"}` `rejected/template-changed`.
 i. **Idempotency**: same `idempotencyKey` seen within 60 s → `202` with the original id and its
-   current state; no new stdout line.
+   current state; no new stdout line. Keys are recorded for accepted and dropped events
+   (a repeat of a dropped one answers `202 {"id","state":"dropped"}`), never for requests
+   rejected in steps a–h.
 j. **Admission** (reads status.json fresh): `paused` → `429 {"id","state":"dropped","reason":"paused"}`;
    `queueDepth` >= 5 → `429 … "reason":"queue-full"`; rate limit (more than 10 events in the
    trailing 60 s for this page, or more than 30 for the session) → `429 … "reason":"rate-limit"`.
    Each emits a stdout `dropped` line and the sidecar remembers the id as `dropped`.
+   Checked in that order. Only accepted events count towards the rate limits.
 k. Accept: emit the stdout `event` line, remember the id as `queued`, answer
    `202 {"id":"ev_…","state":"queued"}`.
 
@@ -154,6 +195,32 @@ The sidecar's `/stream` route replays the file then tails it (poll 250 ms), send
 `event: text` / `event: state` / `event: end` SSE frames (`data:` = JSON), a `: ping`
 comment every 15 s, and closes after `end` or when the event reaches a terminal state
 in status.json.
+
+Wire details: the response starts with a `: stream` comment. Frame data is exactly
+`{"type":"text","text":…}`, `{"type":"state","state":…}` or `{"type":"end"}`; unparsable
+lines, non-objects and unknown types are skipped, and a partial last line waits for its
+newline. On a terminal state (`done`, `rejected`, `dropped`, `expired`; from status.json
+or the sidecar's own `dropped` record) it drains the file once more, sends
+`event: state` with that state unless the file's last state frame already said so, then
+`event: end`, and closes. No `CB_STREAM_DIR` (or no file yet) just means no text frames.
+
+## Browser client (sidecar/client.js)
+
+Same-origin pages (served under `/a/`) need nothing but the script tag. file:// pages in
+token mode carry:
+
+| Meta | Content |
+| --- | --- |
+| `<meta name="cb-token">` | the page token (`HMAC(CB_SECRET, "page:" + page)`) |
+| `<meta name="cb-endpoint">` | `http://127.0.0.1:<port>` (or `localhost`); used only when the page is not http(s) |
+| `<meta name="cb-page">` | optional page path relative to the artifacts folder; default is the decoded `location.pathname`, which the sidecar maps when it is inside `CB_ROOT` |
+| `<meta name="cb-toast" content="off">` | optional, silences the client's toast |
+
+`data-cb-state` on a wired element is one of `queued | running | done | rejected`;
+`data-cb-detail` holds the precise state when it differs (`sending` and
+`awaiting-approval` show as `queued`; `dropped` and `expired` as `rejected`), and
+`data-cb-reason` the reason of a failure (`paused`, `queue-full`, `rate-limit`,
+`template-changed`, `forbidden`, `network`, …).
 
 ## Mod-side rules (hooks/register.tsx)
 
