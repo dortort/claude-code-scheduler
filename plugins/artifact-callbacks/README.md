@@ -181,6 +181,11 @@ suite.
 suite, which needs the `playwright` package and its Chromium (`npm install --no-save
 playwright` and `npx playwright install chromium` once, unless both are already
 installed). The `validate` and `test:hooks` scripts need the `claude` CLI on `PATH`.
+`typecheck:hooks` needs the API declarations in `.claude-plugin/types/`, which Claude
+Code writes (git-ignored) each time a session loads the mod from this folder, for
+example under `claude --plugin-dir plugins/artifact-callbacks`. CI has no session to
+write them, so there it runs `typecheck:node` and checks the hooks module with
+`validate` and `test:hooks`.
 `test:e2e` drives a real interactive session in tmux with real Chromium and needs
 `tmux`, Playwright's Chromium, `claude` and model access; it skips, saying which is
 missing, otherwise. [`test/e2e/README.md`](test/e2e/README.md) has the details.
@@ -189,7 +194,9 @@ missing, otherwise. [`test/e2e/README.md`](test/e2e/README.md) has the details.
 cd plugins/artifact-callbacks
 npm ci                           # dev-only typescript and @types/node
 npm test                         # unit, conformance, browser and docs suites
-npm run typecheck                # tsc --noEmit: sidecar, client.js (// @ts-check), tests, and the hooks module
+npm run typecheck                # both of the next two
+npm run typecheck:node           # tsc --noEmit: sidecar, client.js (// @ts-check) and tests
+npm run typecheck:hooks          # tsc --noEmit: the hooks module (needs .claude-plugin/types, see below)
 npm run test:unit
 npm run test:conformance         # HTTP conformance suite against sidecar/listener.ts
 npm run test:browser             # Chromium end-to-end tests of sidecar/client.js
