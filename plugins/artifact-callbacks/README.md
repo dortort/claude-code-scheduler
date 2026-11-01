@@ -154,20 +154,22 @@ main residual risk: the confirm band, on-disk template matching and the skill's 
 
 ## Development
 
-Tests need Node.js >= 18. The browser suite uses Playwright's Chromium
-(`npx playwright install chromium` once, outside CI it may already be present).
+Tests need Node.js >= 18 and nothing from npm, except the browser suite, which needs
+the `playwright` package and its Chromium (`npm install --no-save playwright` and
+`npx playwright install chromium` once, unless both are already installed). The
+`validate` and `test:hooks` scripts need the `claude` CLI on `PATH`.
 
 ```bash
 cd plugins/artifact-callbacks
-npm test                         # unit, conformance (Node listener) and browser suites
+npm test                         # unit, conformance (Node listener), browser and docs suites
 npm run test:unit
 npm run test:conformance         # HTTP conformance suite against sidecar/listener.mjs
 npm run test:conformance:python  # the same suite against sidecar/listener.py
 npm run test:browser             # Chromium end-to-end tests of sidecar/client.js
 npm run test:docs                # README, SKILL.md, plugin.json and marketplace checks
 
-claude plugin validate .         # manifest, hooks module and types
-claude plugin test .             # hooks module suites (hooks/*.test.ts)
+npm run validate                 # claude plugin validate .: manifest, hooks module and types
+npm run test:hooks               # claude plugin test .: hooks module suites (hooks/*.test.ts)
 ```
 
 To try it in a session from this checkout:
