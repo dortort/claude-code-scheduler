@@ -7,8 +7,9 @@ click on a page Claude wrote into the running session as a channel message.
 Use the [mod](../artifact-callbacks/README.md#mod-or-channel-build) if you can: it has a
 confirm band, one turn per click and no preview flags. This build inherits the channels
 research preview's limits: it needs a claude.ai login or a Console API key, Team and
-Enterprise admins must enable channels (`channelsEnabled`), and because it is not on
-Anthropic's channel allowlist it only loads with the development flag.
+Enterprise admins must enable channels (`channelsEnabled`). It is not on Anthropic's
+channel allowlist, so use the development flag unless your organization includes it in
+its own `allowedChannelPlugins` list. See the [channel distribution rules](https://code.claude.com/docs/en/channels-reference#package-as-a-plugin).
 
 ## When to choose this build
 
