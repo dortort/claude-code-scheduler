@@ -10,9 +10,9 @@
   "scripts": {
     "test": "npm run test:unit && npm run test:conformance && npm run test:browser",
     "test:unit": "node --test test/unit/*.test.mjs",
-    "test:conformance": "node --test --test-concurrency=1 test/conformance/*.test.mjs",
-    "test:conformance:python": "CB_LISTENER_CMD=\"python3 sidecar/listener.py\" node --test --test-concurrency=1 test/conformance/*.test.mjs",
-    "test:browser": "node --test --test-concurrency=1 test/browser/*.test.mjs"
+    "test:conformance": "node --test test/conformance/*.test.mjs",
+    "test:conformance:python": "CB_LISTENER_CMD=\"python3 sidecar/listener.py\" node --test test/conformance/*.test.mjs",
+    "test:browser": "node --test test/browser/*.test.mjs"
   },
   "license": "MIT"
 }
