@@ -27,6 +27,11 @@
       "name": "artifact-callbacks",
       "description": "Turn clicks on HTML pages Claude writes into follow-up prompts in the running session, through a loopback-only listener",
       "source": "./plugins/artifact-callbacks"
+    },
+    {
+      "name": "artifact-callbacks-channel",
+      "description": "Channel build of Artifact Callbacks: clicks on HTML pages Claude writes arrive in the running session as channel messages (research preview, development flag)",
+      "source": "./plugins/artifact-callbacks-channel"
     }
   ]
 }
