@@ -15,6 +15,12 @@ describe('artifact-callbacks workflow', () => {
   test('runs every test:* npm script except the local python shortcut', () => {
     for (const name of Object.keys(scripts).filter((s) => s.startsWith('test:'))) {
       if (name === 'test:conformance:python') continue // CI sets CB_LISTENER_CMD per OS instead
+      const claude = /^claude plugin (\w+) \.$/.exec(scripts[name])
+      if (claude) {
+        // Run from the repository root over every artifact-callbacks* plugin folder.
+        assert.ok(wf.includes(`claude plugin ${claude[1]} "$dir"`), `workflow runs ${scripts[name]} (${name})`)
+        continue
+      }
       assert.ok(wf.includes(`npm run ${name}\n`), `workflow runs npm run ${name}`)
     }
   })
