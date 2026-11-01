@@ -2,6 +2,7 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import { PLUGIN_DIR, REPO_DIR, read, readJson, section, tableRows, firstCode, allCode, existsSync, join } from './helpers.ts'
+import { readdirSync } from 'node:fs'
 import type { PackageJson, PluginManifest } from './helpers.ts'
 
 const readme = read(PLUGIN_DIR, 'README.md')
@@ -185,5 +186,38 @@ describe('README', () => {
     const block = section(readme, 'Writing pages by hand')
     assert.match(block, /<script src="\/_cb\/client\.js" defer><\/script>/)
     for (const [, action] of block.matchAll(/data-cb-action="([^"]*)"/g)) assert.match(action, /^[a-z0-9_-]{1,40}$/)
+  })
+})
+
+describe('mod and channel build', () => {
+  const CHANNEL_DIR = join(PLUGIN_DIR, '..', 'artifact-callbacks-channel')
+  const channelReadme = read(CHANNEL_DIR, 'README.md')
+  const choice = section(readme, 'Mod or channel build?')
+
+  test('the mod README says when to use each build and links the channel README', () => {
+    assert.ok(choice.includes('](../artifact-callbacks-channel/README.md)'))
+    for (const word of ['confirm band', 'Hooks modules', 'mid-turn', 'callbacks_reply', 'Never enable both']) {
+      assert.ok(choice.includes(word), `the section mentions ${word}`)
+    }
+  })
+
+  test('the channel README links back to that section and says when to choose it', () => {
+    assert.ok(channelReadme.includes('](../artifact-callbacks/README.md#mod-or-channel-build)'))
+    assert.ok(section(channelReadme, 'When to choose this build').length > 0)
+    assert.ok(channelReadme.includes('](../artifact-callbacks/README.md#security-model)'))
+    assert.ok(section(readme, 'Security model').length > 0, 'the anchor it links exists')
+  })
+
+  test('the channel README states the guards it lacks, and the server indeed lacks them', () => {
+    const sec = section(channelReadme, 'Security')
+    assert.match(sec, /No confirm band/)
+    assert.match(sec, /No remote or SSH check/)
+    const server = readdirSync(join(CHANNEL_DIR, 'server'), { recursive: true, encoding: 'utf8' })
+      .filter((f) => f.endsWith('.ts') && !f.startsWith('shared'))
+      .map((f) => read(CHANNEL_DIR, 'server', f)).join('\n')
+    // When the server gains these checks, this test fails: update the README with it.
+    for (const name of ['CLAUDE_CODE_REMOTE', 'SSH_CONNECTION', 'SSH_CLIENT', 'SSH_TTY']) {
+      assert.ok(!server.includes(name), `server checks ${name}; the README says it does not`)
+    }
   })
 })
