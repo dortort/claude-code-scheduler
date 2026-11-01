@@ -187,7 +187,13 @@ h. **Template**: when `prompt` is present, re-read the page file from disk, coll
    with its `;`; other entities stay literal; numeric 0, surrogates and > 0x10FFFF stay
    literal), and require an exact match. Attribute names match ASCII case-insensitively,
    only inside start tags; comments, `<!…>`, `<?…>` and end tags are skipped; a bare
-   `data-cb-prompt` is the empty string. A missing page file also fails. Else `409 {"error":"template-changed"}` `rejected/template-changed`.
+   `data-cb-prompt` is the empty string. The content of raw-text and RCDATA elements
+   (`script`, `style`, `textarea`, `title`, `xmp`, `iframe`, `noembed`, `noframes`,
+   `noscript`) up to their end tag (`</name` + whitespace, `/` or `>`, ASCII
+   case-insensitive; for `script` following the tokenizer's escaped and double-escaped
+   states) and everything after `<plaintext>` is text, not tags, so untrusted text
+   embedded there (a JSON blob, a textarea value) cannot define a template.
+   A missing page file also fails. Else `409 {"error":"template-changed"}` `rejected/template-changed`.
 i. **Idempotency**: same `idempotencyKey` seen within 60 s → `202` with the original id and its
    current state; no new stdout line. Keys are recorded for accepted and dropped events
    (a repeat of a dropped one answers `202 {"id","state":"dropped"}`), never for requests
