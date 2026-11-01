@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { isAlive, listenerInfo, startServer, waitFor } from './helpers.ts'
+import { isAlive, listenerInfo, pageCookie, postEvent, startServer, waitFor, writePage } from './helpers.ts'
 import type { Client } from './helpers.ts'
 
 const clients: Client[] = []
@@ -45,6 +45,24 @@ describe('supervision', () => {
     assert.notEqual(second.pid, first.pid)
     assert.equal(second.port, first.port)
     assert.match(c.stderr(), /restarting in 50 ms/)
+  })
+
+  test('a tab opened before the listener restarted still sends events', async () => {
+    const c = start({ CB_CHANNEL_BACKOFF_MS: '50,100,200' })
+    await c.initialize()
+    const first = await listenerInfo(c)
+    writePage(c.project, 'p.html', '<!doctype html><button data-cb-action="go">Go</button>')
+    const cookie = await pageCookie(first.port, 'p.html')
+    assert.equal((await postEvent(first.port, 'p.html', cookie, { action: 'go', data: { n: 1 } })).status, 202)
+    process.kill(first.pid, 'SIGKILL')
+    const second = await waitFor(async () => {
+      const info = await listenerInfo(c)
+      return info.pid !== first.pid ? info : undefined
+    }, 'the restarted listener')
+    assert.equal(second.port, first.port)
+    // Same cookie and Referer as before; the new listener never served p.html itself.
+    const r = await postEvent(second.port, 'p.html', cookie, { action: 'go', data: { n: 2 } })
+    assert.equal(r.status, 202, r.body)
   })
 
   test('restarts back off, then the listener stays down and says why', async () => {

@@ -623,6 +623,37 @@ export function publicRecord (id: string, rec: StatusEventRecord | OwnRecord): P
 }
 
 // ---------------------------------------------------------------------------
+// Served pages file (CB_SERVED_FILE)
+
+/** Most pages the served-pages file keeps (the newest win). */
+export const SERVED_PAGES_CAP = 10_000
+
+/**
+ * Page paths from a served-pages file (`{"v":1,"pages":[...]}`): only entries
+ * that pass the /a/ path rules and name an HTML file; [] for anything unusable.
+ */
+export function parseServedPages (text: string): string[] {
+  let obj: unknown
+  try {
+    obj = JSON.parse(text)
+  } catch {
+    return []
+  }
+  if (!isJsonObject(obj) || obj.v !== 1 || !Array.isArray(obj.pages)) return []
+  const out: string[] = []
+  for (const p of obj.pages) {
+    const rel = checkRelativePath(p)
+    if (rel !== null && isHtmlPath(rel) && !out.includes(rel)) out.push(rel)
+  }
+  return out.slice(-SERVED_PAGES_CAP)
+}
+
+/** The served-pages file for a set of page paths (insertion order, newest last). */
+export function serializeServedPages (pages: Iterable<string>): string {
+  return JSON.stringify({ v: 1, pages: [...pages].slice(-SERVED_PAGES_CAP) }) + '\n'
+}
+
+// ---------------------------------------------------------------------------
 // Rate limiting and idempotency
 
 /** Sliding-window counter: allow() is true while fewer than `limit` hits fall in the trailing window. */

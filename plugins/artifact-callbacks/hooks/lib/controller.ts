@@ -288,6 +288,9 @@ export function createController(config: Config) {
     return checkNode(result)
   }
 
+  /** File name, inside the run folder, of the listener's served-pages record. */
+  const SERVED_FILE = 'served-pages.json'
+
   async function ensureDirs(s: Session): Promise<void> {
     const e = engine()
     const missing: string[] = []
@@ -347,6 +350,9 @@ export function createController(config: Config) {
       CB_ROOT: s.artifactsDir,
       CB_STATUS_FILE: s.statusFile,
       CB_SECRET: s.secret,
+      // The listener keeps its served pages here, so after a restart (same secret
+      // and port) the tabs opened before it still work.
+      CB_SERVED_FILE: join(s.runDir, SERVED_FILE),
     }
     if (config.allowFileOrigin) env.CB_ALLOW_FILE_ORIGIN = '1'
     if (config.streamReplies) env.CB_STREAM_DIR = s.streamDir

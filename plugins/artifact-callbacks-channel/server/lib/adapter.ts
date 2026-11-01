@@ -146,6 +146,8 @@ export class Adapter {
       CB_ROOT: config.artifactsDir,
       CB_STATUS_FILE: join(config.runDir, 'status.json'),
       CB_STREAM_DIR: join(config.runDir, 'streams'),
+      // Served pages outlive a listener restart, so open tabs keep working.
+      CB_SERVED_FILE: join(config.runDir, 'served-pages.json'),
       CB_SECRET: config.secret,
     }
     if (config.allowFileOrigin) env.CB_ALLOW_FILE_ORIGIN = '1'

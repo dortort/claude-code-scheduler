@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import net from 'node:net'
 import { spawn } from 'node:child_process'
 import { join } from 'node:path'
+import { readFileSync, writeFileSync } from 'node:fs'
 import {
   startListener, makeDirs, freePort, waitFor, pidAlive, sleep, request, PLUGIN_DIR, LISTENER_CMD
 } from './harness.ts'
@@ -189,6 +190,97 @@ describe('exit conditions', () => {
     try {
       const r = await request({ port: L.port, path: '/_cb/health' })
       assert.deepEqual(r.json, { ok: true, paused: false })
+    } finally {
+      await L.cleanup()
+    }
+  })
+})
+
+describe('restart keeps open tabs working (CB_SERVED_FILE)', () => {
+  const PAGE = '<!doctype html><button data-cb-action="fix" data-cb-prompt="Fix it">Fix</button>'
+
+  /** A listener on the same dirs, port and secret as a killed one, as the mod restarts it. */
+  async function restartLike (dirs: Dirs, port: number, secret: string, servedFile: string | undefined) {
+    return startListener({ dirs, env: { CB_PORT: String(port), CB_SECRET: secret, CB_SERVED_FILE: servedFile } })
+  }
+
+  test('a tab opened before a crash still sends events after the restart, templates included', async () => {
+    const dirs = makeDirs()
+    const servedFile = join(dirs.run, 'served-pages.json')
+    const A = await startListener({ dirs, env: { CB_SERVED_FILE: servedFile } })
+    let B: Awaited<ReturnType<typeof startListener>> | undefined
+    try {
+      await A.serve('p.html', PAGE)
+      await A.serve('sub/q.html', PAGE)
+      assert.equal((await A.post({ v: 1, action: 'fix' })).status, 202)
+      await A.stop() // SIGKILL: no chance to write anything on the way out
+      B = await restartLike(dirs, A.port, A.secret, servedFile)
+      assert.equal(B.cookieValue, A.cookieValue, 'same secret and port: the tab keeps a valid cookie')
+      // The old tab: same cookie, Referer from before the restart, never re-served by B.
+      const r = await B.post({ v: 1, action: 'fix', prompt: 'Fix it' })
+      assert.equal(r.status, 202, r.body)
+      const r2 = await B.post({ v: 1, action: 'fix' }, { page: 'sub/q.html' })
+      assert.equal(r2.status, 202, r2.body)
+      const ev = await B.waitLine((l) => l.type === 'event' && l.servedPage === 'sub/q.html')
+      assert.equal(ev.body.page, 'sub/q.html')
+      // Pages never served by either stay refused.
+      B.writePage('never.html', PAGE)
+      const r3 = await B.post({ v: 1, action: 'fix' }, { page: 'never.html' })
+      assert.equal(r3.status, 403)
+    } finally {
+      await A.cleanup()
+      await B?.cleanup()
+    }
+  })
+
+  test('without CB_SERVED_FILE a restarted listener knows no pages (403 page)', async () => {
+    const dirs = makeDirs()
+    const A = await startListener({ dirs })
+    let B: Awaited<ReturnType<typeof startListener>> | undefined
+    try {
+      await A.serve('p.html', PAGE)
+      await A.stop()
+      B = await restartLike(dirs, A.port, A.secret, undefined)
+      assert.equal((await B.post({ v: 1, action: 'fix' })).status, 403)
+    } finally {
+      await A.cleanup()
+      await B?.cleanup()
+    }
+  })
+
+  test('the file holds only served HTML pages; a broken or hostile file is ignored entry by entry', async () => {
+    const dirs = makeDirs()
+    const servedFile = join(dirs.run, 'served-pages.json')
+    writeFileSync(servedFile, JSON.stringify({ v: 1, pages: ['ok.html', '../x.html', '.hidden.html', 'a.png', 7, 'sub//y.html'] }))
+    const L = await startListener({ dirs, env: { CB_SERVED_FILE: servedFile } })
+    try {
+      for (const page of ['ok.html', 'x.html', 'hidden.html']) L.writePage(page, PAGE)
+      assert.equal((await L.post({ v: 1, action: 'fix' }, { page: 'ok.html' })).status, 202)
+      assert.equal((await L.post({ v: 1, action: 'fix' }, { page: 'x.html' })).status, 403)
+      await L.serve('x.html')
+      await L.req({ path: '/a/ok.html' })
+      await L.serve('x.html')
+      assert.deepEqual(JSON.parse(readFileSync(servedFile, 'utf8')), { v: 1, pages: ['ok.html', 'x.html'] })
+      // An unparsable file at startup means an empty set, not a crash.
+      writeFileSync(servedFile, '{not json')
+      await L.stop()
+      const M = await startListener({ dirs, env: { CB_PORT: String(L.port), CB_SECRET: L.secret, CB_SERVED_FILE: servedFile } })
+      try {
+        assert.equal((await M.post({ v: 1, action: 'fix' }, { page: 'ok.html' })).status, 403)
+      } finally {
+        await M.stop()
+      }
+    } finally {
+      await L.cleanup()
+    }
+  })
+
+  test('a relative CB_SERVED_FILE is error/bad-config', async () => {
+    const L = await startListener({ env: { CB_SERVED_FILE: 'served-pages.json' }, wait: false })
+    try {
+      const exit = await L.exited
+      assert.equal(exit.code, 1)
+      assert.deepEqual(L.lines.map((l) => [l.type, l.reason]), [['error', 'bad-config']])
     } finally {
       await L.cleanup()
     }
