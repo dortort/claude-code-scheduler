@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+defaults:
+  run:
+    working-directory: plugins/scheduler
+
 permissions:
   contents: read
 
@@ -29,6 +33,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: plugins/scheduler/package-lock.json
       - run: npm ci
       - run: npm run lint
 
@@ -41,6 +46,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: plugins/scheduler/package-lock.json
       - run: npm ci
       - run: npm run typecheck
 
@@ -57,13 +63,14 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
+          cache-dependency-path: plugins/scheduler/package-lock.json
       - run: npm ci
       - run: npm run test:coverage
       - uses: actions/upload-artifact@v4
         if: matrix.node-version == 22
         with:
           name: coverage-report
-          path: coverage/
+          path: plugins/scheduler/coverage/
           retention-days: 14
 
   build:
@@ -75,5 +82,6 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: plugins/scheduler/package-lock.json
       - run: npm ci
       - run: npm run build

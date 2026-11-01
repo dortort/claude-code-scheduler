@@ -4,6 +4,10 @@ on:
   release:
     types: [published]
 
+defaults:
+  run:
+    working-directory: plugins/scheduler
+
 permissions:
   contents: read
   id-token: write
@@ -19,6 +23,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
+          cache-dependency-path: plugins/scheduler/package-lock.json
           registry-url: https://registry.npmjs.org
       - run: npm ci
       - run: npm run typecheck

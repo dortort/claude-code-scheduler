@@ -1,7 +1,7 @@
 version: 2
 updates:
   - package-ecosystem: npm
-    directories: ["/", "/e2e"]
+    directories: ["/plugins/scheduler", "/plugins/scheduler/e2e"]
     schedule: { interval: weekly, day: monday }
     cooldown: { default-days: 7, semver-major-days: 14 }
     commit-message: { prefix: chore, include: scope }

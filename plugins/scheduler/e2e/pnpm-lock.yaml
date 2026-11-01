@@ -5,31 +5,31 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  '@agentry/core': file:../../agentry/packages/core
-  '@agentry/claude': file:../../agentry/packages/claude
-  '@agentry/mcp': file:../../agentry/packages/mcp
+  '@agentry/core': file:../../../../agentry/packages/core
+  '@agentry/claude': file:../../../../agentry/packages/claude
+  '@agentry/mcp': file:../../../../agentry/packages/mcp
 
 importers:
 
   .:
     devDependencies:
       agentry:
-        specifier: file:../../agentry/packages/cli
-        version: file:../../agentry/packages/cli
+        specifier: file:../../../../agentry/packages/cli
+        version: file:../../../../agentry/packages/cli
       tsx:
         specifier: ^4.19.2
         version: 4.23.1
 
 packages:
 
-  '@agentry/claude@file:../../agentry/packages/claude':
-    resolution: {directory: ../../agentry/packages/claude, type: directory}
+  '@agentry/claude@file:../../../../agentry/packages/claude':
+    resolution: {directory: ../../../../agentry/packages/claude, type: directory}
 
-  '@agentry/core@file:../../agentry/packages/core':
-    resolution: {directory: ../../agentry/packages/core, type: directory}
+  '@agentry/core@file:../../../../agentry/packages/core':
+    resolution: {directory: ../../../../agentry/packages/core, type: directory}
 
-  '@agentry/mcp@file:../../agentry/packages/mcp':
-    resolution: {directory: ../../agentry/packages/mcp, type: directory}
+  '@agentry/mcp@file:../../../../agentry/packages/mcp':
+    resolution: {directory: ../../../../agentry/packages/mcp, type: directory}
 
   '@babel/code-frame@7.29.7':
     resolution: {integrity: sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw==}
@@ -231,8 +231,8 @@ packages:
   '@types/yargs@17.0.35':
     resolution: {integrity: sha512-qUHkeCyQFxMXg79wQfTtfndEC+N9ZZg76HJftDJp+qH2tV7Gj4OJi7l+PiWwJ+pWtW8GwSmqsDj/oymhrTWXjg==}
 
-  agentry@file:../../agentry/packages/cli:
-    resolution: {directory: ../../agentry/packages/cli, type: directory}
+  agentry@file:../../../../agentry/packages/cli:
+    resolution: {directory: ../../../../agentry/packages/cli, type: directory}
     hasBin: true
 
   ansi-styles@4.3.0:
@@ -369,18 +369,18 @@ packages:
 
 snapshots:
 
-  '@agentry/claude@file:../../agentry/packages/claude':
+  '@agentry/claude@file:../../../../agentry/packages/claude':
     dependencies:
-      '@agentry/core': file:../../agentry/packages/core
+      '@agentry/core': file:../../../../agentry/packages/core
 
-  '@agentry/core@file:../../agentry/packages/core':
+  '@agentry/core@file:../../../../agentry/packages/core':
     dependencies:
       expect: 29.7.0
       zod: 3.25.76
 
-  '@agentry/mcp@file:../../agentry/packages/mcp':
+  '@agentry/mcp@file:../../../../agentry/packages/mcp':
     dependencies:
-      '@agentry/core': file:../../agentry/packages/core
+      '@agentry/core': file:../../../../agentry/packages/core
 
   '@babel/code-frame@7.29.7':
     dependencies:
@@ -509,11 +509,11 @@ snapshots:
     dependencies:
       '@types/yargs-parser': 21.0.3
 
-  agentry@file:../../agentry/packages/cli:
+  agentry@file:../../../../agentry/packages/cli:
     dependencies:
-      '@agentry/claude': file:../../agentry/packages/claude
-      '@agentry/core': file:../../agentry/packages/core
-      '@agentry/mcp': file:../../agentry/packages/mcp
+      '@agentry/claude': file:../../../../agentry/packages/claude
+      '@agentry/core': file:../../../../agentry/packages/core
+      '@agentry/mcp': file:../../../../agentry/packages/mcp
 
   ansi-styles@4.3.0:
     dependencies:

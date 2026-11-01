@@ -1,7 +1,7 @@
 import path from 'node:path';
 import type { AgentRunExtra, RunRecord, Sandbox } from 'agentry';
 
-/** Repo root, used as the Claude Code `--plugin-dir` so the scheduler plugin loads. */
+/** Scheduler package root, used as the Claude Code `--plugin-dir` so the scheduler plugin loads. */
 export const SCHEDULER_ROOT = path.resolve(import.meta.dirname, '..');
 
 /** Sandbox-relative subdir used as the scheduler's isolated global state directory. */

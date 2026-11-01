@@ -5,24 +5,24 @@ agent** using [agentry](https://github.com/dortort/agentry) ("Playwright for AI
 Agents"), then assert on the agent's reply. These replace the old Vitest-subprocess
 suite.
 
-This is a **self-contained pnpm project**, deliberately isolated from the repo's
-npm-managed root so `npm ci` in CI never has to resolve agentry's `workspace:*`
+This is a **self-contained pnpm project**, deliberately isolated from the scheduler's
+npm-managed package so `npm ci` in CI never has to resolve agentry's `workspace:*`
 dependencies. It is **local-only** and never runs in CI.
 
 ## Prerequisites
 
 - The `claude` CLI on your `PATH`, authenticated.
 - `pnpm`.
-- A sibling checkout of agentry at `../agentry`, built once:
+- A sibling checkout of agentry next to `claude-plugins` (at `../../../agentry` from `plugins/scheduler`), built once:
   ```bash
-  cd ../agentry && pnpm install && pnpm -r build
+  cd ../../../agentry && pnpm install && pnpm -r build
   ```
   agentry is linked via `file:` in `package.json`; the `pnpm.overrides` there
   rewrite its internal `workspace:*` deps to the sibling paths.
 
 ## Running
 
-From the repo root:
+From `plugins/scheduler`:
 
 ```bash
 npm run test:e2e          # installs e2e deps, then runs all scenarios (live)
@@ -51,7 +51,7 @@ the model's wording is not).
   tolerant text assertions over the agent's reply.
 
 Each scenario gets a fresh sandbox as its working directory; `agent.run(cmd, opts)`
-spawns `claude --plugin-dir <repo-root> -p <cmd>` so the scheduler plugin is loaded.
+spawns `claude --plugin-dir <repo-root>/plugins/scheduler -p <cmd>` so the scheduler plugin is loaded.
 
 ### State isolation (determinism)
 

@@ -1,0 +1,27 @@
+{
+  "name": "dortort",
+  "owner": {
+    "name": "dortort"
+  },
+  "metadata": {
+    "description": "Claude Code plugins, mods, and portable agent skills by dortort"
+  },
+  "plugins": [
+    {
+      "name": "scheduler",
+      "description": "Schedule recurring and one-time AI tasks using native OS schedulers",
+      "source": {
+        "source": "npm",
+        "package": "@dortort/scheduler"
+      }
+    },
+    {
+      "name": "dortort",
+      "description": "Portable agent skills for NotebookLM, Terraform, YouTube, and image generation",
+      "source": {
+        "source": "github",
+        "repo": "dortort/skills"
+      }
+    }
+  ]
+}
