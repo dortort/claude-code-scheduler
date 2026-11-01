@@ -132,6 +132,7 @@ npm run lint        # ESLint with typescript-eslint
 npm run typecheck   # Type checking only
 npm run build       # TypeScript compilation
 npm run test:coverage  # Tests with coverage report
+npm run test:package   # Pack, install in a clean directory, and exercise the CLI
 ```
 
 CI runs automatically on every push and PR to `main` (lint, typecheck, test on Node 18+22, build).
@@ -145,7 +146,20 @@ The test suite has two tiers:
 
 ### Releasing
 
-Publishing is automated via GitHub Actions when a [GitHub Release](https://docs.github.com/en/repositories/releasing-projects-on-github) is created. The release workflow requires:
+Publishing is automated via GitHub Actions when a [GitHub Release](https://docs.github.com/en/repositories/releasing-projects-on-github) with a `scheduler--v<version>` tag is created. Releases for other plugins do not publish the scheduler.
+
+From `plugins/scheduler`, prepare a release with:
+
+```bash
+npm version patch --no-git-tag-version
+npm run test:package
+```
+
+The version command synchronizes `package.json`, `npm-shrinkwrap.json`, and the plugin manifest. Commit those changes, let CI pass, then create the release with a matching tag (for example, `scheduler--v0.4.1`). Packing and publishing reject mismatched plugin versions, and the release workflow also checks the tag.
+
+The published `npm-shrinkwrap.json` lets Claude Code install the scheduler's runtime dependencies automatically. Keep it committed; `package-lock.json` is excluded from npm packages.
+
+The release workflow requires:
 
 - An `npm` environment configured in the repository settings
 - An npm trusted publisher for `@dortort/scheduler` configured for the GitHub

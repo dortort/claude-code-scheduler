@@ -33,7 +33,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: plugins/scheduler/package-lock.json
+          cache-dependency-path: plugins/scheduler/npm-shrinkwrap.json
       - run: npm ci
       - run: npm run lint
 
@@ -46,7 +46,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: plugins/scheduler/package-lock.json
+          cache-dependency-path: plugins/scheduler/npm-shrinkwrap.json
       - run: npm ci
       - run: npm run typecheck
 
@@ -63,7 +63,7 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
-          cache-dependency-path: plugins/scheduler/package-lock.json
+          cache-dependency-path: plugins/scheduler/npm-shrinkwrap.json
       - run: npm ci
       - run: npm run test:coverage
       - uses: actions/upload-artifact@v4
@@ -82,6 +82,6 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: plugins/scheduler/package-lock.json
+          cache-dependency-path: plugins/scheduler/npm-shrinkwrap.json
       - run: npm ci
-      - run: npm run build
+      - run: npm run test:package
