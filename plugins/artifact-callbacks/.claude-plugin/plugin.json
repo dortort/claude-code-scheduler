@@ -1,12 +1,19 @@
 {
   "name": "artifact-callbacks",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Turn clicks on HTML pages Claude writes into follow-up prompts in the running session, through a loopback-only listener",
   "author": {
     "name": "dortort"
   },
   "license": "MIT",
-  "keywords": ["artifacts", "html", "callbacks", "interactive", "mod", "prompts"],
+  "keywords": [
+    "artifacts",
+    "html",
+    "callbacks",
+    "interactive",
+    "mod",
+    "prompts"
+  ],
   "types": "./types/index.d.ts",
   "userConfig": {
     "port": {
@@ -20,7 +27,11 @@
       "title": "Confirm events",
       "description": "first-per-page: ask before the first event of each page; always: ask before every event; never: run events straight away",
       "default": "first-per-page",
-      "options": ["first-per-page", "always", "never"]
+      "options": [
+        "first-per-page",
+        "always",
+        "never"
+      ]
     },
     "artifactsDir": {
       "type": "string",
