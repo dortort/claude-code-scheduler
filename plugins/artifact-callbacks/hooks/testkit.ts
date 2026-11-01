@@ -25,11 +25,15 @@ export class FakeSidecar {
   private wake: (() => void) | undefined
   isClosed = false
 
-  constructor(
-    readonly argv: readonly string[],
-    readonly env: Readonly<Record<string, string>>,
-    readonly cwd: string | undefined,
-  ) {}
+  readonly argv: readonly string[]
+  readonly env: Readonly<Record<string, string>>
+  readonly cwd: string | undefined
+
+  constructor(argv: readonly string[], env: Readonly<Record<string, string>>, cwd: string | undefined) {
+    this.argv = argv
+    this.env = env
+    this.cwd = cwd
+  }
 
   /** Writes one NDJSON line (or raw text) to the sidecar's stdout. */
   emit(line: unknown): void {
