@@ -172,3 +172,27 @@ document.head.appendChild(s)
     })
   }
 })
+
+describe('files other than pages cannot act as this origin', () => {
+  test('an SVG under /a/ opened on its own runs no script and sends no event', async () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg"><script>
+document.documentElement.setAttribute('data-ran', '1')
+fetch('/_cb/event', { method: 'POST', headers: { 'content-type': 'application/json' }, referrerPolicy: 'no-referrer',
+  body: JSON.stringify({ v: 1, action: 'from-svg', page: 'p.html' }) })
+</script></svg>`
+    L.writePage('evil.svg', svg)
+    const { ctx } = await open(browser, `${L.origin}/a/p.html`) // the victim holds the cookie
+    const before = events(L).length
+    try {
+      const p = await ctx.newPage()
+      await p.goto(`${L.origin}/a/evil.svg`)
+      await sleep(500)
+      assert.equal(await p.evaluate(() => window.origin), 'null', 'sandboxed: opaque origin')
+      assert.equal(await p.evaluate(() => document.documentElement.getAttribute('data-ran')), null, 'its script did not run')
+      await L.marker()
+      assert.equal(events(L).length, before)
+    } finally {
+      await ctx.close()
+    }
+  })
+})

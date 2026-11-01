@@ -272,7 +272,9 @@ the link keeps working, and keep templates that are still in use unchanged.
   `data-cb-data` (`{"issue":1234}`) and let the turn read it.
 - **Escape everything you display.** HTML-escape any external text you put in the page
   (`&`, `<`, `>`, `"`, `'`), so it cannot add markup, attributes or script. Injected
-  script could send events with the page's data-cb-prompt templates.
+  script could send events with the data-cb-prompt templates of this page, or of any other
+  page you served, since all pages share one origin. Inside a `<script>` (a JSON blob), also
+  escape `<` as `\u003c` so the text cannot close the script.
 - **Confirm destructive actions.** Anything that deletes, overwrites, force-pushes,
   deploys, sends messages or spends money gets `data-cb-confirm="…"` with a specific
   sentence ("Delete branch feature/x locally and on origin?"). In the turn, still ask

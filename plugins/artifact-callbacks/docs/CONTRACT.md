@@ -190,7 +190,11 @@ g. **Page**: cookie mode: the served page is the `Referer` path under `/a/` (onl
    whose origin is an allowed origin; percent-decoded and checked like `/a/`) if it is in
    the served-pages set, else `body.page` (strip a leading `/a/` or `/`) if it is in the
    set; else `403` `rejected/page`. The body's `page` is overwritten with it. Token mode:
-   `page` = `body.page` as verified by the token.
+   `page` = `body.page` as verified by the token. In cookie mode this identifies a page but
+   does not authenticate it: every `/a/` page shares one origin, and script in any of them can
+   omit or forge (same-origin) the Referer and name another served page; SPEC's security model
+   lists this residual risk. To keep files that are not pages from acting as the origin, every
+   non-`.html` file under `/a/` is served with `Content-Security-Policy: sandbox`.
 h. **Template**: when `prompt` is present, re-read the page file from disk, collect every
    `data-cb-prompt` attribute value (single-, double-quoted or unquoted, HTML entities
    decoded: named `&amp; &lt; &gt; &quot; &#39; &apos;` and numeric `&#N; &#xH;`, each

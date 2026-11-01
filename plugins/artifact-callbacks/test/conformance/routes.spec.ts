@@ -193,6 +193,7 @@ describe('/a/ static serving', () => {
     assert.match(parts[0], /^cb_session_\d+=[0-9a-f]{64}$/)
     const attrs = parts.slice(1).map((s) => s.toLowerCase()).sort()
     assert.deepEqual(attrs, ['httponly', 'path=/_cb/', 'samesite=strict'])
+    assert.equal(r.headers['content-security-policy'], undefined, 'pages run their own scripts')
   })
 
   test('nested html page', async () => {
@@ -238,6 +239,7 @@ describe('/a/ static serving', () => {
       assert.equal(r.body, `content-${ext}`)
       assert.equal(r.headers['set-cookie'], undefined, ext)
       assertBaseHeaders(assert, r)
+      assert.equal(r.headers['content-security-policy'], 'sandbox', `${ext} opened on its own runs no script as this origin`)
     }
     L.writePage('m/noext', 'x')
     assert.equal((await L.req({ path: '/a/m/noext' })).headers['content-type'], 'application/octet-stream')
