@@ -12,8 +12,9 @@ Anthropic's channel allowlist it only loads with the development flag.
 
 ## When to choose this build
 
-- **Hooks modules don't load in your Claude Code.** The mod depends on them, and they are
-  an early-access surface. This build reaches the session through an MCP server instead.
+- **Hooks modules don't load in your Claude Code.** The mod needs Claude Code 2.1.287+
+  in the terminal, or 2.1.286+ in Desktop's Code tab, and permission to load mods. This
+  build reaches the session through an MCP server instead; channel policy still applies.
 - **You want clicks delivered mid-turn.** A click arrives as a `<channel>` message while
   Claude is working, batched with any others, so Claude can fold a stream of small inputs
   (a checklist, a live dashboard) into the work in progress. The mod gives every click a
