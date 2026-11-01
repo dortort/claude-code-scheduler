@@ -95,7 +95,30 @@ describe('template', () => {
       action: 'a',
       data: { n: 3, o: { k: [1, 2] } },
     })
-    expect(t).toBe('"3" "{\'k\':[1,2]}" (none) [\n  1,\n  2\n]')
+    expect(t).toBe('"3" "{\'k\':[1,2]}" (none) "[1,2]"')
+    // The default template keeps its pretty JSON block.
+    expect(renderTemplate('{{data.o.k | json}}', { page: 'p', action: 'a', data: { o: { k: [1, 2] } } }, 'default')).toBe(
+      '[\n  1,\n  2\n]',
+    )
+  })
+
+  test('in a page template every data placeholder, | json or not, is escaped and capped at 500', () => {
+    const long = { s: 'line one\nline two "quoted" '.repeat(100), arr: Array.from({ length: 400 }, (_, i) => `item ${i}`) }
+    const t = renderTemplate('A {{data.s | json}} B {{data.arr | json}} C {{data | json}} D {{data}}', { page: 'p', action: 'a', data: long })
+    const parts = t.split(/ [BCD] /)
+    expect(parts).toHaveLength(4)
+    for (const part of parts) {
+      const value = part.replace(/^A /, '')
+      expect(value.startsWith('"')).toBe(true)
+      expect(value.endsWith('"')).toBe(true)
+      expect(value.length).toBeLessThanOrEqual(PLACEHOLDER_CAP + 2)
+      expect(value).not.toContain('\n')
+      expect(value.slice(1, -1)).not.toContain('"')
+    }
+    // through renderPrompt too: a page template cannot splice 3000 characters of data
+    const text = renderPrompt({ page: 'p', action: 'a', data: long, prompt: 'Do {{data | json}}' })
+    expect(text.split('\n')).toHaveLength(2)
+    expect(text.split('\n')[1]?.length).toBeLessThanOrEqual('Do '.length + PLACEHOLDER_CAP + 2)
   })
 
   test('unknown placeholders render empty; getPath ignores inherited keys', () => {
@@ -121,8 +144,9 @@ describe('template', () => {
   })
 
   test('the JSON block is capped', () => {
-    const text = renderTemplate('{{data | json}}', { page: 'p', action: 'a', data: { x: 'q'.repeat(10_000) } })
+    const text = renderTemplate('{{data | json}}', { page: 'p', action: 'a', data: { x: 'q'.repeat(10_000) } }, 'default')
     expect(text.length).toBe(JSON_CAP)
+    expect(renderPrompt({ page: 'p', action: 'a', data: { x: 'q'.repeat(10_000) } }, 100_000)).toContain('q'.repeat(2000))
   })
 
   test('neutralise flattens control characters and line separators', () => {

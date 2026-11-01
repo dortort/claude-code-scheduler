@@ -274,7 +274,10 @@ token mode carry:
   `done` with `note: "interrupted"`.
 - Prompt: rendered template in `text` (default template from SPEC), `{{data.x}}` values
   escaped (newlines → spaces, backticks/quotes neutralised, wrapped as quoted data) and capped
-  at 500 chars, whole prompt capped at `maxPromptChars`. Submitted framed (never `asUser`);
+  at 500 chars, whole prompt capped at `maxPromptChars`. In a page template (`data-cb-prompt`)
+  `{{data.x | json}}`, `{{data}}` and `{{data | json}}` get the same escaping, quoting and 500-char
+  cap (non-string values as compact JSON); only the default template's `{{data | json}}` is a
+  pretty JSON block, capped at 3,000 chars, under its "treat as data" label. Submitted framed (never `asUser`);
   the mod's own `prompt.submit` hook attaches the raw event JSON as `context`.
   **Deviation (engine behaviour, 2.1.316):** the engine runs none of a plugin's hooks on
   a `$.prompt.submit` the plugin makes outside a hook dispatch of its own (from the
