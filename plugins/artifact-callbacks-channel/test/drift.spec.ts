@@ -3,7 +3,7 @@
 import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { appendFileSync, cpSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { CHANNEL_DIR, MOD_DIR, copies, strays } from '../scripts/copies.ts'
@@ -13,9 +13,14 @@ function check (channelDir: string): { status: number | null; out: string } {
   return { status: r.status, out: r.stdout + r.stderr }
 }
 
-/** A throwaway copy of both plugins, laid out as in the repository. */
+/** A throwaway copy of both plugins, laid out as in the repository, reached
+ *  through a symlinked folder the way macOS reaches its temp dir (/var is
+ *  /private/var), so the script's run-as-main check meets an unresolved argv. */
 function sandbox (): { mod: string; channel: string } {
-  const root = mkdtempSync(join(tmpdir(), 'cb-drift-'))
+  const real = mkdtempSync(join(tmpdir(), 'cb-drift-'))
+  const root = join(real, 'via-link')
+  mkdirSync(join(real, 'target'))
+  symlinkSync(join(real, 'target'), root, 'dir')
   const mod = join(root, 'artifact-callbacks')
   const channel = join(root, 'artifact-callbacks-channel')
   cpSync(join(MOD_DIR, 'sidecar'), join(mod, 'sidecar'), { recursive: true })

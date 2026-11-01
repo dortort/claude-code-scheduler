@@ -4,8 +4,8 @@
 //
 //   node scripts/sync-sidecar.ts           write the copies, delete strays
 //   node scripts/sync-sidecar.ts --check   exit 1 and list what differs
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { CHANNEL_DIR, copies, strays } from './copies.ts'
 
@@ -34,7 +34,18 @@ export function sync (): string[] {
   return changed
 }
 
-if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+/** Run as a script? import.meta.url is resolved through symlinks (macOS /var is
+ *  /private/var) and argv[1] is not, so compare real paths. */
+function isMain (): boolean {
+  if (process.argv[1] === undefined) return false
+  try {
+    return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))
+  } catch {
+    return false
+  }
+}
+
+if (isMain()) {
   if (process.argv.includes('--check')) {
     const out = drift()
     if (out.length > 0) {
