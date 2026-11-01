@@ -10,6 +10,7 @@ on:
       - '.github/workflows/artifact-callbacks.yml'
       - '.github/workflows/artifact-release.yml'
       - 'RELEASING.md'
+      - 'scripts/*marketplace*'
   pull_request:
     branches: [main]
     paths:
@@ -19,6 +20,7 @@ on:
       - '.github/workflows/artifact-callbacks.yml'
       - '.github/workflows/artifact-release.yml'
       - 'RELEASING.md'
+      - 'scripts/*marketplace*'
   workflow_dispatch:
 
 defaults:
@@ -165,6 +167,10 @@ jobs:
               echo "::endgroup::"
             fi
           done
+      - name: Verify clean release-pinned marketplace installs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/check-marketplace-install.mjs
       - name: Hooks module tests
         run: |
           for dir in plugins/artifact-callbacks*/; do
@@ -184,5 +190,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22.18.0'
+      - name: Release pin policy and promotion tests
+        working-directory: .
+        run: |
+          node scripts/marketplace.mjs check
+          node --test scripts/marketplace.test.mjs
       - name: README, SKILL.md, manifest and CI checks
         run: npm run test:docs

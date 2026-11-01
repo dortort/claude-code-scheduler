@@ -96,7 +96,8 @@ describe('artifact-callbacks workflow', () => {
 
   test('has no Python job, setup or listener', () => {
     assert.doesNotMatch(wf, /python/i)
-    assert.doesNotMatch(wf, /listener\.py|\.mjs\b/)
+    // Repository release tooling may use .mjs; the listener remains TypeScript.
+    assert.doesNotMatch(wf, /listener\.(?:py|mjs)\b/)
   })
 
   test('installs Chromium only in CI and validates and tests the plugin with Claude Code', () => {
