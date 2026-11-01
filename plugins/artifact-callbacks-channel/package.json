@@ -1,0 +1,24 @@
+{
+  "name": "@dortort/artifact-callbacks-channel-dev",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Dev scripts for the Artifact Callbacks channel adapter (the plugin itself ships no node_modules)",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "test": "npm run test:unit && npm run test:browser",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:unit": "node --test \"test/*.spec.ts\"",
+    "test:browser": "node --test \"test/browser/*.spec.ts\"",
+    "sync": "node scripts/sync-sidecar.ts",
+    "sync:check": "node scripts/sync-sidecar.ts --check",
+    "validate": "claude plugin validate ."
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "^7.0.2"
+  }
+}
