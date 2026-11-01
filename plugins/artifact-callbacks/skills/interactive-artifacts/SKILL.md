@@ -176,9 +176,12 @@ To use a template from script, keep it in the file and read it back:
 
 ## file:// pages (token mode)
 
-Only when the user has turned on the `allowFileOrigin` option and Claude Code has given
-you a per-page token for that page. In this mode the page carries the endpoint and the
-token in meta tags, and the client sends `X-CB-Token` instead of relying on the cookie:
+Only when the user has turned on the `allowFileOrigin` option. Then the system-prompt
+section says so and the mod offers a `page_token` tool. Call it with the page path
+relative to the artifacts folder (`{"page": "triage.html"}`) and paste the head tags it
+returns into that page, still saved under the artifacts folder. The page carries the
+endpoint and the token in meta tags, and the client sends `X-CB-Token` instead of
+relying on the cookie:
 
 ```html
 <meta name="cb-token" content="<page token for this page>">
@@ -188,9 +191,11 @@ token in meta tags, and the client sends `X-CB-Token` instead of relying on the 
 ```
 
 A token is bound to one page path and one session (and to the current secret: after
-`/callbacks rotate` it is stale). It sits in the file and in the transcript, so prefer
-the served link whenever you can; never reuse a token for a different page, and do not
-put tokens in pages that will be shared.
+`/callbacks rotate` it is stale: call the tool again and rewrite the tags). It sits in
+the file and in the transcript, so prefer the served link whenever you can; never reuse
+a token for a different page or invent one, and do not put tokens in pages that will be
+shared. The page must live inside the artifacts folder: the token is checked against
+that file.
 
 ## Patterns
 

@@ -143,6 +143,16 @@ describe('SKILL.md against client.js', () => {
     for (const name of client.metas) assert.ok(text.includes(`name="${name}"`), `${name} documented`)
   })
 
+  test('the file:// section names the tool the mod registers for page tokens', () => {
+    const tool = /PAGE_TOKEN_TOOL = '([a-z_]+)'/.exec(read(PLUGIN_DIR, 'hooks', 'lib', 'token.ts'))[1]
+    assert.ok(section(skill, 'file:// pages (token mode)').includes(`\`${tool}\` tool`), `SKILL.md names ${tool}`)
+    assert.ok(read(PLUGIN_DIR, 'README.md').includes(`\`${tool}\` tool`), `README names ${tool}`)
+    const tags = read(PLUGIN_DIR, 'hooks', 'lib', 'token.ts')
+    for (const name of cbMetaNames(section(skill, 'file:// pages (token mode)'))) {
+      assert.ok(tags.includes(`<meta name="${name}"`), `the tool returns ${name}`)
+    }
+  })
+
   test('the security section covers untrusted prompts and destructive actions', () => {
     const sec = section(skill, 'Security rules')
     assert.match(sec, /untrusted content in `data-cb-prompt`/)
