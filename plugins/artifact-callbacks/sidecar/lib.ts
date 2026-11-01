@@ -675,3 +675,25 @@ export function streamLine (obj: JsonObject): StreamLine | null {
   if (obj.type === 'end') return { type: 'end' }
   return null
 }
+
+// ---------------------------------------------------------------------------
+// Parent watch
+
+/** True while a process with this pid exists. EPERM means it exists but belongs to someone else. */
+export function processExists (pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === 'EPERM'
+  }
+}
+
+/**
+ * Whether the listener has been orphaned: its parent pid changed (POSIX
+ * re-parents orphans) or the original parent no longer exists (Windows keeps
+ * the stale ppid, so only the liveness check notices there).
+ */
+export function isOrphaned (parent: number, currentPpid: number, exists: (pid: number) => boolean = processExists): boolean {
+  return currentPpid !== parent || !exists(parent)
+}

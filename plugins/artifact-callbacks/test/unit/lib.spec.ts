@@ -12,7 +12,7 @@ import {
   resolveInsideRoot, mimeFor, isHtmlPath, decodeEntities, extractAttributeValues,
   extractPromptTemplates, validateBody, cpLength, parseStatus, publicRecord,
   SlidingWindow, RateLimiter, IdempotencyCache, sseFrame, NdjsonSplitter, SECRET_RE,
-  isEventRecord, streamLine
+  isEventRecord, streamLine, processExists, isOrphaned
 } from '../../sidecar/lib.ts'
 import type { EventBody, StdoutLine } from '../../sidecar/lib.ts'
 
@@ -341,5 +341,25 @@ describe('wire types', () => {
       { type: 'error', reason: 'port-in-use', message: 'port 1 is already in use' }
     ]
     assert.deepEqual(lines.map((l) => l.type), ['ready', 'event', 'rejected', 'dropped', 'error'])
+  })
+})
+
+describe('parent watch', () => {
+  test('processExists: this process and its parent exist, an exited child does not', async () => {
+    assert.equal(processExists(process.pid), true)
+    assert.equal(processExists(process.ppid), true)
+    const { spawn } = await import('node:child_process')
+    const child = spawn(process.execPath, ['-e', ''], { stdio: 'ignore' })
+    const pid = child.pid as number
+    await new Promise((resolve) => child.once('exit', resolve))
+    assert.equal(processExists(pid), false)
+  })
+  test('isOrphaned: a changed ppid (POSIX) or a vanished parent (Windows keeps the ppid)', () => {
+    const alive = (): boolean => true
+    const gone = (): boolean => false
+    assert.equal(isOrphaned(42, 42, alive), false)
+    assert.equal(isOrphaned(42, 1, alive), true)
+    assert.equal(isOrphaned(42, 42, gone), true)
+    assert.equal(isOrphaned(process.ppid, process.ppid), false)
   })
 })

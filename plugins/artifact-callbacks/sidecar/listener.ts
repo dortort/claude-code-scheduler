@@ -18,7 +18,7 @@ import {
   isAllowedHost, isAllowedOrigin, isJsonContentType, requestPath, normalizeArtifactPath,
   pageFromBody, pageFromFileBody, pageFromReferer, resolveInsideRoot, mimeFor, isHtmlPath,
   extractPromptTemplates, validateBody, parseStatus, publicRecord, isEventRecord, EMPTY_STATUS,
-  RateLimiter, IdempotencyCache, sseFrame, NdjsonSplitter, streamLine
+  RateLimiter, IdempotencyCache, sseFrame, NdjsonSplitter, streamLine, isOrphaned
 } from './lib.ts'
 import type {
   StdoutLine, RejectedLine, RejectReason, ErrorReason, DropReason, EventBody, Status,
@@ -626,6 +626,6 @@ function start (cfg: CheckedConfig): void {
 
   const parent = process.ppid
   setInterval(() => {
-    if (process.ppid !== parent) shutdown()
+    if (isOrphaned(parent, process.ppid)) shutdown()
   }, 1000)
 }
