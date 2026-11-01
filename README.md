@@ -8,7 +8,9 @@ The `dortort` marketplace for Claude Code plugins, mods, and agent skills.
 claude plugin marketplace add dortort/claude-plugins
 claude plugin install scheduler@dortort
 claude plugin install dortort@dortort
+# Choose ONE Artifact Callbacks variant; do not enable both in the same session.
 claude plugin install artifact-callbacks@dortort
+# Or use the research-preview channel alternative:
 claude plugin install artifact-callbacks-channel@dortort
 ```
 
@@ -24,7 +26,8 @@ Install any of them:
 The scheduler requires Node.js >= 18, the Claude Code CLI, and macOS or Linux.
 See its [documentation](plugins/scheduler/README.md) for commands and configuration.
 Artifact Callbacks is a mod that needs Node.js >= 22.18, which runs its TypeScript
-listener directly (no build step, no Python); see its
+listener directly (no build step, no Python). Use Claude Code **2.1.287+ in the
+terminal**, or **2.1.286+ in Desktop's Code tab**; see its
 [documentation](plugins/artifact-callbacks/README.md). Its channel build (an MCP server on the
 same Node, loaded with `claude --dangerously-load-development-channels
 plugin:artifact-callbacks-channel@dortort`) is a research-preview alternative for sessions

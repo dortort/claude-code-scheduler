@@ -22,8 +22,9 @@ Or, at the prompt of a terminal session:
 /plugin install artifact-callbacks --marketplace dortort/claude-plugins
 ```
 
-Requirements: Claude Code with mods (hooks modules), and Node.js >= 22.18 on `PATH` for
-the listener. Node 22.18 and later run the listener's TypeScript source directly, so
+Requirements: Claude Code **2.1.287 or later in the terminal**, or the Desktop Code
+tab with bundled Claude Code **2.1.286 or later**, and Node.js >= 22.18 on `PATH` for
+the listener. These are the [documented mod requirements](https://code.claude.com/docs/en/plugins/mods#turn-mods-on-or-off). Node 22.18 and later run the listener's TypeScript source directly, so
 there is nothing to build or install and no other runtime to choose. Nothing else to
 configure: the next interactive session starts the listener and tells Claude how to wire
 a page.
@@ -52,9 +53,10 @@ works with any login, and gives you things the channel cannot:
 
 **Use the channel build** when:
 
-- **Hooks modules don't load in your Claude Code.** Mods are an early-access surface; if
-  this mod never shows a status line or `/callbacks`, the channel build reaches the session
-  through an MCP server instead.
+- **Hooks modules don't load in your Claude Code.** First check the version requirements
+  above and whether your organization permits mods. If mods are unavailable in your host,
+  the channel build reaches the session through an MCP server instead; its channel policy
+  requirements still apply.
 - **You want clicks delivered mid-turn.** A channel message lands while Claude is working
   and several can arrive together, which suits pages that send a stream of small inputs
   (a checklist being ticked off, a live dashboard). This mod makes each click wait for its
