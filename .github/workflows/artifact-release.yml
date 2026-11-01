@@ -1,0 +1,68 @@
+name: Release Artifact Callbacks
+
+on:
+  workflow_dispatch:
+    inputs:
+      plugin:
+        description: Plugin to release from main
+        required: true
+        type: choice
+        options:
+          - artifact-callbacks
+          - artifact-callbacks-channel
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: artifact-release-${{ inputs.plugin }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PLUGIN: ${{ inputs.plugin }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22.18.0'
+      - name: Require successful Artifact Callbacks CI for this commit
+        run: |
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow artifact-callbacks.yml \
+            --commit "$GITHUB_SHA" --branch main --limit 1 --json status,conclusion \
+            | jq -e 'length == 1 and all(.[]; .status == "completed" and .conclusion == "success")'
+      - name: Check release metadata
+        id: metadata
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { appendFileSync, readFileSync } from 'node:fs';
+          const plugin = process.env.PLUGIN;
+          assert(['artifact-callbacks', 'artifact-callbacks-channel'].includes(plugin));
+          const root = `plugins/${plugin}`;
+          const read = file => JSON.parse(readFileSync(`${root}/${file}`, 'utf8'));
+          const manifest = read('.claude-plugin/plugin.json');
+          const pkg = read('package.json');
+          const lock = read('package-lock.json');
+          assert.equal(manifest.name, plugin);
+          assert.match(manifest.version, /^\d+\.\d+\.\d+$/);
+          for (const version of [pkg.version, lock.version, lock.packages[''].version]) {
+            assert.equal(version, manifest.version, 'Release versions must match');
+          }
+          const tag = `${plugin}--v${manifest.version}`;
+          const notes = `${root}/releases/${manifest.version}.md`;
+          assert(readFileSync(notes, 'utf8').trim(), 'Release notes must not be empty');
+          appendFileSync(process.env.GITHUB_OUTPUT, `tag=${tag}\nnotes=${notes}\n`);
+          JS
+      - name: Create the plugin tag and GitHub release
+        env:
+          TAG: ${{ steps.metadata.outputs.tag }}
+          NOTES: ${{ steps.metadata.outputs.notes }}
+        run: |
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "$TAG" --notes-file "$NOTES" --latest=false

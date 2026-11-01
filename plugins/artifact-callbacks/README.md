@@ -253,3 +253,7 @@ CI runs all of the above in [`.github/workflows/artifact-callbacks.yml`](../../.
 ## License
 
 [MIT](../../LICENSE)
+
+## Releases
+
+See the [release process](../../RELEASING.md) for independent plugin versions, tags, and release notes.
