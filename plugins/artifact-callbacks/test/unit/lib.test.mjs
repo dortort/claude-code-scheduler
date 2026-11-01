@@ -1,0 +1,309 @@
+import { test, describe } from 'node:test'
+import assert from 'node:assert/strict'
+import { createHmac } from 'node:crypto'
+import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, realpathSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+import {
+  hmacHex, cookieValue, cookieName, pageToken, safeEqual, newEventId, EVENT_ID_RE,
+  parseCookies, isAllowedHost, isAllowedOrigin, isJsonContentType, requestPath,
+  normalizeArtifactPath, checkRelativePath, pageFromBody, pageFromFileBody, pageFromReferer,
+  resolveInsideRoot, mimeFor, isHtmlPath, decodeEntities, extractAttributeValues,
+  extractPromptTemplates, validateBody, cpLength, parseStatus, publicRecord,
+  SlidingWindow, RateLimiter, IdempotencyCache, sseFrame, NdjsonSplitter, SECRET_RE
+} from '../../sidecar/lib.mjs'
+
+const SECRET = '0123456789abcdef0123456789abcdef'
+
+describe('hmac', () => {
+  test('hmacHex matches node crypto with utf8 key', () => {
+    const want = createHmac('sha256', SECRET).update('hello').digest('hex')
+    assert.equal(hmacHex(SECRET, 'hello'), want)
+    assert.match(want, /^[0-9a-f]{64}$/)
+  })
+  test('cookieValue is HMAC of the port as a string', () => {
+    assert.equal(cookieValue(SECRET, 51234), hmacHex(SECRET, '51234'))
+    assert.notEqual(cookieValue(SECRET, 1), cookieValue(SECRET, 2))
+  })
+  test('cookieName is port scoped', () => {
+    assert.equal(cookieName(51234), 'cb_session_51234')
+  })
+  test('pageToken prefixes page:', () => {
+    assert.equal(pageToken(SECRET, 'triage.html'), hmacHex(SECRET, 'page:triage.html'))
+    assert.notEqual(pageToken(SECRET, 'a.html'), pageToken(SECRET, 'b.html'))
+  })
+  test('known vector', () => {
+    // RFC 4231 test case 2
+    assert.equal(hmacHex('Jefe', 'what do ya want for nothing?'),
+      '5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843')
+  })
+  test('safeEqual', () => {
+    assert.equal(safeEqual('abc', 'abc'), true)
+    assert.equal(safeEqual('abc', 'abd'), false)
+    assert.equal(safeEqual('abc', 'abcd'), false)
+    assert.equal(safeEqual(undefined, 'a'), false)
+    assert.equal(safeEqual('', ''), true)
+  })
+  test('SECRET_RE', () => {
+    assert.ok(SECRET_RE.test(SECRET))
+    assert.ok(!SECRET_RE.test('abc'))
+    assert.ok(!SECRET_RE.test('z'.repeat(40)))
+  })
+})
+
+describe('ids', () => {
+  test('newEventId format and uniqueness', () => {
+    const seen = new Set()
+    for (let i = 0; i < 2000; i++) {
+      const id = newEventId()
+      assert.match(id, EVENT_ID_RE)
+      seen.add(id)
+    }
+    assert.equal(seen.size, 2000)
+  })
+})
+
+describe('request helpers', () => {
+  test('parseCookies', () => {
+    const m = parseCookies('a=1; cb_session_5=xyz ; b="q"; a=2; junk')
+    assert.equal(m.get('a'), '1')
+    assert.equal(m.get('cb_session_5'), 'xyz')
+    assert.equal(m.get('b'), 'q')
+    assert.equal(parseCookies(undefined).size, 0)
+  })
+  test('isAllowedHost', () => {
+    assert.ok(isAllowedHost('127.0.0.1:80', 80))
+    assert.ok(isAllowedHost('localhost:80', 80))
+    assert.ok(isAllowedHost('LOCALHOST:80', 80))
+    assert.ok(!isAllowedHost('127.0.0.1', 80))
+    assert.ok(!isAllowedHost('localhost:81', 80))
+    assert.ok(!isAllowedHost('evil.example:80', 80))
+    assert.ok(!isAllowedHost('[::1]:80', 80))
+    assert.ok(!isAllowedHost(undefined, 80))
+  })
+  test('isAllowedOrigin', () => {
+    assert.ok(isAllowedOrigin('http://127.0.0.1:9', 9))
+    assert.ok(isAllowedOrigin('http://localhost:9', 9))
+    assert.ok(!isAllowedOrigin('https://127.0.0.1:9', 9))
+    assert.ok(!isAllowedOrigin('null', 9))
+    assert.ok(!isAllowedOrigin('http://127.0.0.1:10', 9))
+  })
+  test('isJsonContentType', () => {
+    assert.ok(isJsonContentType('application/json'))
+    assert.ok(isJsonContentType('Application/JSON; charset=utf-8'))
+    assert.ok(!isJsonContentType('text/plain'))
+    assert.ok(!isJsonContentType('application/jsonx'))
+    assert.ok(!isJsonContentType(undefined))
+  })
+  test('requestPath', () => {
+    assert.equal(requestPath('/a/x.html?q=1'), '/a/x.html')
+    assert.equal(requestPath('/a/x.html#f'), '/a/x.html')
+    assert.equal(requestPath('http://h/x'), null)
+    assert.equal(requestPath('*'), null)
+  })
+})
+
+describe('artifact paths', () => {
+  test('normalizeArtifactPath accepts plain paths', () => {
+    assert.equal(normalizeArtifactPath('triage.html'), 'triage.html')
+    assert.equal(normalizeArtifactPath('sub/x.html'), 'sub/x.html')
+    assert.equal(normalizeArtifactPath('my%20page.html'), 'my page.html')
+  })
+  test('normalizeArtifactPath refuses traversal and oddities', () => {
+    for (const bad of ['', '..', '../x', 'a/../b', '%2e%2e/x', '%2E%2E%2Fx', 'a/./b', '.env', 'sub/.git/config',
+      'a//b', 'a/', 'a\\b', 'a%5cb', 'a%00b', '%zz', '/abs']) {
+      assert.equal(normalizeArtifactPath(bad), null, bad)
+    }
+  })
+  test('checkRelativePath', () => {
+    assert.equal(checkRelativePath('a/b'), 'a/b')
+    assert.equal(checkRelativePath('a/../b'), null)
+    assert.equal(checkRelativePath(5), null)
+  })
+  test('pageFromBody strips /a/ or /', () => {
+    assert.equal(pageFromBody('/a/triage.html'), 'triage.html')
+    assert.equal(pageFromBody('/sub/x.html'), 'sub/x.html')
+    assert.equal(pageFromBody('triage.html'), 'triage.html')
+    assert.equal(pageFromBody('/a/../x'), null)
+    assert.equal(pageFromBody(null), null)
+  })
+  test('pageFromFileBody makes root-absolute paths relative', () => {
+    assert.equal(pageFromFileBody('/home/u/p/.claude/artifacts/t.html', ['/home/u/p/.claude/artifacts']), 't.html')
+    assert.equal(pageFromFileBody('/real/root/s/t.html', ['/x', '/real/root/']), 's/t.html')
+    assert.equal(pageFromFileBody('t.html', ['/r']), 't.html')
+    assert.equal(pageFromFileBody('/r/../etc/passwd', ['/r']), null)
+  })
+  test('pageFromReferer', () => {
+    assert.equal(pageFromReferer('http://127.0.0.1:5/a/t.html?x=1', 5), 't.html')
+    assert.equal(pageFromReferer('http://localhost:5/a/sub/my%20t.html', 5), 'sub/my t.html')
+    assert.equal(pageFromReferer('http://evil:5/a/t.html', 5), null)
+    assert.equal(pageFromReferer('http://127.0.0.1:5/b/t.html', 5), null)
+    assert.equal(pageFromReferer('nonsense', 5), null)
+    assert.equal(pageFromReferer(undefined, 5), null)
+  })
+  test('resolveInsideRoot follows rules', async () => {
+    const base = realpathSync(mkdtempSync(join(tmpdir(), 'cb-unit-')))
+    try {
+      const root = join(base, 'root')
+      mkdirSync(join(root, 'sub'), { recursive: true })
+      writeFileSync(join(root, 'a.html'), 'x')
+      writeFileSync(join(root, 'sub', 'b.html'), 'x')
+      writeFileSync(join(base, 'secret.txt'), 'x')
+      symlinkSync(join(base, 'secret.txt'), join(root, 'out.txt'))
+      symlinkSync(join(root, 'a.html'), join(root, 'in.html'))
+      assert.equal(await resolveInsideRoot(root, 'a.html'), join(root, 'a.html'))
+      assert.equal(await resolveInsideRoot(root, 'sub/b.html'), join(root, 'sub', 'b.html'))
+      assert.equal(await resolveInsideRoot(root, 'in.html'), join(root, 'a.html'))
+      assert.equal(await resolveInsideRoot(root, 'out.txt'), null)
+      assert.equal(await resolveInsideRoot(root, 'sub'), null)
+      assert.equal(await resolveInsideRoot(root, 'missing.html'), null)
+      assert.equal(await resolveInsideRoot(root, null), null)
+    } finally {
+      rmSync(base, { recursive: true, force: true })
+    }
+  })
+  test('mimeFor', () => {
+    assert.equal(mimeFor('a.html'), 'text/html; charset=utf-8')
+    assert.equal(mimeFor('A.HTML'), 'text/html; charset=utf-8')
+    assert.equal(mimeFor('x/y.mjs'), 'text/javascript; charset=utf-8')
+    assert.equal(mimeFor('y.woff2'), 'font/woff2')
+    assert.equal(mimeFor('y.jpeg'), 'image/jpeg')
+    assert.equal(mimeFor('y.exe'), 'application/octet-stream')
+    assert.equal(mimeFor('noext'), 'application/octet-stream')
+    assert.ok(isHtmlPath('p.html'))
+    assert.ok(!isHtmlPath('p.htm'))
+  })
+})
+
+describe('entities and attributes', () => {
+  test('decodeEntities named and numeric', () => {
+    assert.equal(decodeEntities('&amp;&lt;&gt;&quot;&#39;&apos;'), '&<>"\'\'')
+    assert.equal(decodeEntities('&#65;&#x42;&#X43;'), 'ABC')
+    assert.equal(decodeEntities('&#x1F600;'), '\u{1F600}')
+    assert.equal(decodeEntities('&nbsp;&copy;'), '&nbsp;&copy;')
+    assert.equal(decodeEntities('&amp'), '&amp')
+    assert.equal(decodeEntities('&#0;&#xD800;&#x110000;'), '&#0;&#xD800;&#x110000;')
+    assert.equal(decodeEntities('&amp;lt;'), '&lt;')
+  })
+  test('extractAttributeValues handles quoting styles', () => {
+    const html = `<!doctype html><p>
+      <button data-cb-action=fix data-cb-prompt="Fix {{data.test}} &amp; more">x</button>
+      <a data-cb-prompt='Say "hi"'>y</a>
+      <form DATA-CB-PROMPT=unquoted&#x21;></form>
+      <div data-cb-prompt = "spaced"></div>
+      <input data-cb-prompt>
+      <div data-cb-prompt="multi
+line"></div>`
+    assert.deepEqual(extractPromptTemplates(html),
+      ['Fix {{data.test}} & more', 'Say "hi"', 'unquoted!', 'spaced', '', 'multi\nline'])
+  })
+  test('ignores text content, comments and other attributes', () => {
+    const html = `data-cb-prompt="text" <!-- <b data-cb-prompt="c"> --> <b title='data-cb-prompt="t"' x-data-cb-prompt="n">`
+    assert.deepEqual(extractPromptTemplates(html), [])
+  })
+  test('attribute value containing > inside quotes', () => {
+    assert.deepEqual(extractAttributeValues('<b data-cb-prompt="a > b">', 'data-cb-prompt'), ['a > b'])
+  })
+  test('self-closing and slash separated attributes', () => {
+    assert.deepEqual(extractAttributeValues('<i/data-cb-prompt="s"/>', 'data-cb-prompt'), ['s'])
+  })
+  test('unterminated tag does not hang', () => {
+    assert.deepEqual(extractAttributeValues('<b data-cb-prompt="open', 'data-cb-prompt'), ['open'])
+    assert.deepEqual(extractAttributeValues('<', 'x'), [])
+    assert.deepEqual(extractAttributeValues('<!-- never closed', 'x'), [])
+  })
+})
+
+describe('validateBody', () => {
+  test('minimal body', () => {
+    assert.deepEqual(validateBody({ v: 1, action: 'fix' }), { value: { v: 1, action: 'fix', data: {} } })
+  })
+  test('drops unknown keys and keeps known', () => {
+    const r = validateBody({ v: 1, action: 'a-b_1', label: 'L', data: { x: [1] }, prompt: 'p', idempotencyKey: 'k', page: 'p.html', extra: 1 })
+    assert.deepEqual(r.value, { v: 1, action: 'a-b_1', label: 'L', data: { x: [1] }, prompt: 'p', idempotencyKey: 'k', page: 'p.html' })
+  })
+  test('null optional fields count as absent', () => {
+    assert.deepEqual(validateBody({ v: 1, action: 'x', label: null, data: null, prompt: null }).value, { v: 1, action: 'x', data: {} })
+  })
+  const bad = [
+    [null, /^body/], [[], /^body/], ['s', /^body/],
+    [{ action: 'x' }, /^v /], [{ v: 2, action: 'x' }, /^v /], [{ v: '1', action: 'x' }, /^v /],
+    [{ v: 1 }, /^action/], [{ v: 1, action: 'Fix' }, /^action/], [{ v: 1, action: 'a'.repeat(41) }, /^action/], [{ v: 1, action: '' }, /^action/],
+    [{ v: 1, action: 'x', label: 5 }, /^label/], [{ v: 1, action: 'x', label: 'l'.repeat(201) }, /^label/],
+    [{ v: 1, action: 'x', data: [] }, /^data/], [{ v: 1, action: 'x', data: 'x' }, /^data/],
+    [{ v: 1, action: 'x', prompt: 'p'.repeat(2001) }, /^prompt/],
+    [{ v: 1, action: 'x', idempotencyKey: 'k'.repeat(101) }, /^idempotencyKey/],
+    [{ v: 1, action: 'x', page: 'p'.repeat(301) }, /^page/]
+  ]
+  for (const [body, re] of bad) {
+    test(`rejects ${JSON.stringify(body).slice(0, 60)}`, () => {
+      const r = validateBody(body)
+      assert.ok(r.error, 'expected error')
+      assert.match(r.error, re)
+    })
+  }
+  test('lengths count code points', () => {
+    assert.equal(cpLength('\u{1F600}'), 1)
+    assert.ok(validateBody({ v: 1, action: 'x', label: '\u{1F600}'.repeat(200) }).value)
+    assert.equal(validateBody({ v: 1, action: 'x', label: 'l'.repeat(200) }).value.label.length, 200)
+  })
+})
+
+describe('status', () => {
+  test('parseStatus', () => {
+    assert.equal(parseStatus('nope'), null)
+    assert.equal(parseStatus('[]'), null)
+    assert.deepEqual(parseStatus('{}'), { v: 1, paused: false, queueDepth: 0, events: {} })
+    const s = parseStatus(JSON.stringify({ v: 1, paused: true, queueDepth: 3, events: { a: { state: 'running' } } }))
+    assert.equal(s.paused, true)
+    assert.equal(s.queueDepth, 3)
+    assert.equal(s.events.a.state, 'running')
+  })
+  test('publicRecord', () => {
+    assert.deepEqual(publicRecord('ev_1', { id: 'ev_1', state: 'done', page: 'p', action: 'a', turnStartedAt: 1, turnEndedAt: 2, note: null }),
+      { id: 'ev_1', state: 'done', turnStartedAt: 1, turnEndedAt: 2, note: null })
+    assert.deepEqual(publicRecord('ev_2', { state: 'dropped', reason: 'paused' }), { id: 'ev_2', state: 'dropped', reason: 'paused' })
+  })
+})
+
+describe('limits', () => {
+  test('SlidingWindow', () => {
+    const w = new SlidingWindow(2, 1000)
+    assert.ok(w.allow('k', 0)); w.record('k', 0)
+    assert.ok(w.allow('k', 10)); w.record('k', 10)
+    assert.ok(!w.allow('k', 999))
+    assert.ok(w.allow('other', 999))
+    assert.ok(w.allow('k', 1000)) // first hit left the window
+    assert.equal(w.count('k', 1011), 0)
+  })
+  test('RateLimiter per page and per session', () => {
+    const r = new RateLimiter()
+    for (let i = 0; i < 10; i++) { assert.ok(r.allow('a', i)); r.record('a', i) }
+    assert.ok(!r.allow('a', 100))
+    for (let i = 0; i < 10; i++) { r.record('b', 200 + i); r.record('c', 300 + i) }
+    assert.ok(!r.allow('d', 400)) // 30 in session
+    assert.ok(r.allow('d', 60_000 + 10)) // the 10 'a' hits aged out (ages 0..9 <= 10)
+  })
+  test('IdempotencyCache', () => {
+    const c = new IdempotencyCache(1000)
+    c.set('k', 'ev_1', 0)
+    assert.equal(c.get('k', 500), 'ev_1')
+    assert.equal(c.get('k', 1000), undefined)
+    c.set('k', 'ev_2', 1000)
+    assert.equal(c.get('k', 1500), 'ev_2')
+  })
+})
+
+describe('sse', () => {
+  test('sseFrame', () => {
+    assert.equal(sseFrame('text', { type: 'text', text: 'a\nb' }), 'event: text\ndata: {"type":"text","text":"a\\nb"}\n\n')
+  })
+  test('NdjsonSplitter', () => {
+    const s = new NdjsonSplitter()
+    assert.deepEqual(s.push('{"a":1}\n{"b"'), [{ a: 1 }])
+    assert.deepEqual(s.push(':2}\nbad\n[1]\n\n'), [{ b: 2 }])
+    assert.deepEqual(s.push('{"c":3}'), [])
+    assert.deepEqual(s.push('\n'), [{ c: 3 }])
+  })
+})
