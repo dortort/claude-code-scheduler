@@ -1,0 +1,47 @@
+{
+  "name": "artifact-callbacks-channel",
+  "displayName": "Artifact Callbacks (channel)",
+  "version": "0.1.0",
+  "description": "Channel build of Artifact Callbacks: clicks on HTML pages Claude writes arrive in the running session as channel messages, through the same loopback-only listener",
+  "author": {
+    "name": "dortort"
+  },
+  "license": "MIT",
+  "keywords": ["artifacts", "html", "callbacks", "interactive", "channel", "mcp"],
+  "channels": [
+    {
+      "server": "callbacks",
+      "displayName": "Artifact Callbacks",
+      "userConfig": {
+        "port": {
+          "type": "number",
+          "title": "Port",
+          "description": "Fixed loopback port for the listener (0 picks a random free port each session)",
+          "default": 0,
+          "min": 0,
+          "max": 65535
+        },
+        "artifactsDir": {
+          "type": "string",
+          "title": "Artifacts folder",
+          "description": "Folder the listener serves pages from, relative to the project root",
+          "default": ".claude/artifacts"
+        },
+        "allowFileOrigin": {
+          "type": "boolean",
+          "title": "Allow file:// pages",
+          "description": "Accept events from pages opened straight from disk, authenticated by a per-page token",
+          "default": false
+        },
+        "maxPromptChars": {
+          "type": "number",
+          "title": "Max message length",
+          "description": "Cap on the rendered text of one event, in characters",
+          "default": 4000,
+          "min": 200,
+          "max": 100000
+        }
+      }
+    }
+  ]
+}
