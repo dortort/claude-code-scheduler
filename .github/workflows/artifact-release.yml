@@ -31,6 +31,8 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '22.18.0'
+      - name: Check stable marketplace pins
+        run: node scripts/marketplace.mjs check
       - name: Require successful Artifact Callbacks CI for this commit
         run: |
           gh run list --repo "$GITHUB_REPOSITORY" --workflow artifact-callbacks.yml \
@@ -66,3 +68,13 @@ jobs:
         run: |
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "$TAG" --notes-file "$NOTES" --latest=false
+      - name: Show marketplace promotion command
+        env:
+          TAG: ${{ steps.metadata.outputs.tag }}
+        run: |
+          node --input-type=module <<'JS'
+          import { appendFileSync } from 'node:fs';
+          const version = process.env.TAG.split('--v').at(-1);
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+            `Release published. Promote it through a catalog PR after a clean install check:\n\nnode scripts/marketplace.mjs promote ${process.env.PLUGIN} ${version}\n\nThe current marketplace pin stays in place until that PR is merged.\n`);
+          JS
