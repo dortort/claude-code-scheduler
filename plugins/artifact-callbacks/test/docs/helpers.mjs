@@ -141,9 +141,11 @@ export function clientSurface (src) {
   for (const m of src.matchAll(/\.(set|remove)Attribute\('(data-cb-[a-z-]+)'/g)) writes.add(m[2])
   const metas = new Set([...src.matchAll(/meta\('(cb-[a-z-]+)'\)/g)].map((m) => m[1]))
   const api = new Set()
-  const obj = /window\.ArtifactCallbacks = \{([\s\S]*?)\n {2}\}/.exec(src)
+  const obj = /\b(?:window|cbWindow)\.ArtifactCallbacks = \{([\s\S]*?)\n {2}\}/.exec(src)
   if (obj) for (const m of obj[1].matchAll(/^\s*([A-Za-z_]\w*)\s*:/gm)) api.add(m[1])
-  const handle = new Set([...src.matchAll(/Handle\.prototype\.([A-Za-z]\w*)\s*=/g)].map((m) => m[1]))
+  // Handle's public methods: the class body's method definitions (`    name (`).
+  const cls = /\n {2}class Handle \{\n([\s\S]*?)\n {2}\}\n/.exec(src)
+  const handle = new Set(cls ? [...cls[1].matchAll(/^ {4}([A-Za-z]\w*) \(/gm)].map((m) => m[1]).filter((n) => n !== 'constructor') : [])
   const events = new Set()
   const l = /this\._l = \{([^}]*)\}/.exec(src)
   if (l) for (const m of l[1].matchAll(/([a-z]+)\s*:/g)) events.add(m[1])

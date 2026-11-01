@@ -1,6 +1,9 @@
+// @ts-check
 /*
  * Artifact Callbacks browser client. Served by the listener at /_cb/client.js.
  * Classic script: <script src="/_cb/client.js" defer></script>
+ * Plain JavaScript (browsers cannot run TypeScript), type-checked by
+ * `tsc --checkJs` through the JSDoc annotations below.
  *
  * Declarative wiring (click / submit, delegated from document):
  *   data-cb-action   on a button, link or form: the action name (required)
@@ -31,12 +34,43 @@
  *   <meta name="cb-page" content="triage.html"> optional, page path relative to the artifacts folder
  * Other: <meta name="cb-toast" content="off"> silences the toast.
  */
+
 (function () {
   'use strict'
-  if (window.ArtifactCallbacks && window.ArtifactCallbacks.__cb) return
 
+  /**
+   * @typedef {(value: string, handle: Handle) => void} Listener  state or text listener
+   * @typedef {(handle: Handle) => void} DoneListener
+   * @typedef {{ label?: string | null, prompt?: string | null, page?: string, idempotencyKey?: string,
+   *   toast?: boolean, onState?: Listener }} SendOptions
+   * @typedef {{ v: 1, action: string, data: object, page: string, idempotencyKey: string,
+   *   label?: string, prompt?: string }} EventBody
+   * @typedef {{ status: number, json: any }} ApiResult  `json` is the parsed response body, or null
+   * @typedef {{ token: string | null, endpoint: string | null }} Env  endpoint '' = same origin, null = unusable
+   * @typedef {{ label: string, run: () => void }} ToastAction
+   * @typedef {{ close: () => void }} Closable
+   * @typedef {Error & { state?: string, reason?: string | null, handle?: Handle }} EventError
+   * @typedef {{ reason?: string | null, note?: string | null }} StateExtra
+   * @typedef {Element & { value?: string }} Labelled  an element that may carry a value (button, input)
+   * @typedef {Element & { name?: string, type?: string, value: string, checked?: boolean,
+   *   disabled?: boolean, options?: HTMLOptionsCollection }} FormControl
+   * @typedef {{ pollMinMs: number, pollMaxMs: number, retryMs: number, toastMs: number }} ClientConfig
+   * @typedef {{ __cb: true, version: 1,
+   *   send: (action: string, data?: object | null, opts?: SendOptions) => Promise<Handle>,
+   *   onDone: (cb: DoneListener) => void, page: () => string,
+   *   toast: (text: string, kind?: string, action?: ToastAction) => HTMLElement | null,
+   *   config: ClientConfig }} ArtifactCallbacksApi
+   */
+
+  // window.ArtifactCallbacks is this script's own global; the DOM typings do not know it.
+  var cbWindow = /** @type {{ ArtifactCallbacks?: ArtifactCallbacksApi }} */ (/** @type {unknown} */ (window))
+  if (cbWindow.ArtifactCallbacks && cbWindow.ArtifactCallbacks.__cb) return
+
+  /** @type {Record<string, number>} */
   var TERMINAL = { done: 1, rejected: 1, dropped: 1, expired: 1 }
+  /** @type {Record<string, number>} */
   var FAILED = { rejected: 1, dropped: 1, expired: 1 }
+  /** @type {Record<string, string>} */
   var ELEMENT_STATE = {
     sending: 'queued',
     queued: 'queued',
@@ -47,28 +81,34 @@
     dropped: 'rejected',
     expired: 'rejected'
   }
+  /** @type {ClientConfig} */
   var config = { pollMinMs: 400, pollMaxMs: 3000, retryMs: 400, toastMs: 4000 }
+  /** @type {DoneListener[]} */
   var doneListeners = []
 
   // -------------------------------------------------------------------------
   // environment
 
+  /** @param {string} name @returns {string | null} */
   function meta (name) {
     var m = document.querySelector('meta[name="' + name + '"]')
     return m ? m.getAttribute('content') || '' : null
   }
 
+  /** @returns {Env} */
   function env () {
     var token = meta('cb-token')
     var local = location.protocol === 'http:' || location.protocol === 'https:'
+    /** @type {Env} */
     var e = { token: token || null, endpoint: '' }
     if (e.token && !local) {
       var m = /^(http:\/\/(?:127\.0\.0\.1|localhost):\d{1,5})\/?$/.exec(meta('cb-endpoint') || '')
-      e.endpoint = m ? m[1] : null
+      e.endpoint = m ? /** @type {string} */ (m[1]) : null
     }
     return e
   }
 
+  /** @returns {string} */
   function currentPage () {
     var p = meta('cb-page')
     if (p) return p
@@ -77,6 +117,7 @@
     return path
   }
 
+  /** @returns {string} */
   function newKey () {
     var c = window.crypto
     if (c && typeof c.randomUUID === 'function') return c.randomUUID()
@@ -84,13 +125,23 @@
     if (c && c.getRandomValues) c.getRandomValues(a)
     else for (var i = 0; i < 16; i++) a[i] = Math.floor(Math.random() * 256)
     var s = ''
-    for (var j = 0; j < 16; j++) s += (a[j] < 16 ? '0' : '') + a[j].toString(16)
+    for (var j = 0; j < 16; j++) {
+      var b = /** @type {number} */ (a[j])
+      s += (b < 16 ? '0' : '') + b.toString(16)
+    }
     return s
   }
 
+  /**
+   * @param {string} method
+   * @param {string} path
+   * @param {EventBody} [body]
+   * @returns {Promise<ApiResult>}
+   */
   function api (method, path, body) {
     var e = env()
     if (e.endpoint === null) return Promise.reject(new Error('cb-endpoint meta is missing or not a loopback URL'))
+    /** @type {Record<string, string>} */
     var headers = {}
     if (body !== undefined) headers['Content-Type'] = 'application/json'
     if (e.token) headers['X-CB-Token'] = e.token
@@ -112,8 +163,15 @@
   // -------------------------------------------------------------------------
   // toast
 
+  /** @type {HTMLElement | null} */
   var toastBox = null
 
+  /**
+   * @param {string} text
+   * @param {string} [kind] info (default), ok or error
+   * @param {ToastAction} [action] a button on the toast; the toast then stays until used or dismissed
+   * @returns {HTMLElement | null}
+   */
   function toast (text, kind, action) {
     if (meta('cb-toast') === 'off' || !document.body) return null
     if (!toastBox || !toastBox.isConnected) {
@@ -157,14 +215,16 @@
     return el
   }
 
+  /** @type {Record<string, string>} */
   var DROP_TEXT = {
     paused: 'Not sent: callbacks are paused in Claude Code.',
     'queue-full': 'Not sent: too many events are already waiting. Try again shortly.',
     'rate-limit': 'Not sent: too many events in the last minute. Try again shortly.'
   }
 
+  /** @param {Handle} h @returns {string} */
   function failureText (h) {
-    if (h.state === 'dropped') return DROP_TEXT[h.reason] || 'Not sent (' + (h.reason || 'dropped') + ').'
+    if (h.state === 'dropped') return DROP_TEXT[String(h.reason)] || 'Not sent (' + (h.reason || 'dropped') + ').'
     if (h.state === 'expired') return 'Expired: nobody approved this event in Claude Code.'
     if (h.reason === 'network') return 'Could not reach Claude Code. Is the session still running?'
     if (h.reason === 'too-large') return 'Not sent: too much data.'
@@ -173,110 +233,203 @@
     return 'Discarded in Claude Code.'
   }
 
+  /** @param {unknown} err */
+  function rethrowLater (err) {
+    setTimeout(function () { throw err }, 0)
+  }
+
   // -------------------------------------------------------------------------
   // handle
 
-  function Handle (action, label, opts) {
-    var self = this
-    this.action = action
-    this.label = label
-    this.id = null
-    this.state = null
-    this.reason = null
-    this.note = null
-    this._toast = opts.toast !== false
-    this._l = { state: [], text: [] }
-    this._timer = null
-    this._stream = null
-    this.done = new Promise(function (resolve, reject) {
-      self._resolve = resolve
-      self._reject = reject
-    })
-    this.done.catch(function () {}) // observing is optional
-  }
-
-  Handle.prototype.on = function (type, cb) {
-    if (!this._l[type]) throw new Error('unknown event type: ' + type)
-    this._l[type].push(cb)
-    var self = this
-    if (type === 'state' && this.state) setTimeout(function () { cb(self.state, self) }, 0)
-    if (type === 'text') this.stream()
-    return this
-  }
-
-  Handle.prototype.off = function (type, cb) {
-    var l = this._l[type] || []
-    var i = l.indexOf(cb)
-    if (i >= 0) l.splice(i, 1)
-    return this
-  }
-
-  Handle.prototype.onDone = function (cb) {
-    var self = this
-    this.done.then(function () { cb(self) }, function () {})
-    return this
-  }
-
-  Handle.prototype._emit = function (type, value) {
-    var l = this._l[type].slice()
-    for (var i = 0; i < l.length; i++) {
-      try { l[i](value, this) } catch (err) { setTimeout(function () { throw err }, 0) }
-    }
-  }
-
-  Handle.prototype._set = function (state, extra) {
-    if (extra) {
-      if (extra.reason !== undefined) this.reason = extra.reason
-      if (extra.note !== undefined) this.note = extra.note
-    }
-    if (state === this.state || (this.state && TERMINAL[this.state])) return
-    this.state = state
-    this._emit('state', state)
-    if (!TERMINAL[state]) return
-    clearTimeout(this._timer)
-    if (state === 'done') {
-      if (this._toast) toast('Done: ' + (this.label || this.action), 'ok')
-      this._resolve(this)
-      for (var i = 0; i < doneListeners.length; i++) {
-        try { doneListeners[i](this) } catch (err) { setTimeout(function () { throw err }, 0) }
-      }
-    } else {
-      if (this._toast && this.reason !== 'template-changed') toast(failureText(this), 'error')
-      var e = new Error('event ' + state + (this.reason ? ': ' + this.reason : ''))
-      e.state = state
-      e.reason = this.reason
-      e.handle = this
-      this._reject(e)
-    }
-  }
-
-  Handle.prototype._poll = function () {
-    var self = this
-    var delay = config.pollMinMs
-    var failures = 0
-    function tick () {
-      if (TERMINAL[self.state]) return
-      api('GET', '/_cb/events/' + encodeURIComponent(self.id)).then(function (r) {
-        if (r.status === 200 && r.json && typeof r.json.state === 'string') {
-          failures = 0
-          if (r.json.state !== self.state) delay = config.pollMinMs
-          self._set(r.json.state, r.json)
-        } else {
-          failures++
-        }
-      }, function () { failures++ }).then(function () {
-        if (TERMINAL[self.state]) return
-        if (failures >= 10) {
-          if (self._toast) toast('Lost track of "' + (self.label || self.action) + '".', 'error')
-          return
-        }
-        delay = Math.min(Math.round(delay * 1.5), config.pollMaxMs)
-        self._timer = setTimeout(tick, delay)
+  /** One event sent from this page: its id, state and listeners. */
+  class Handle {
+    /**
+     * @param {string} action
+     * @param {string | undefined} label
+     * @param {SendOptions} opts
+     */
+    constructor (action, label, opts) {
+      var self = this
+      this.action = action
+      this.label = label
+      /** @type {string | null} */
+      this.id = null
+      /** @type {string | null} */
+      this.state = null
+      /** @type {string | null} */
+      this.reason = null
+      /** @type {string | null} */
+      this.note = null
+      this._toast = opts.toast !== false
+      /** @type {{ state: Listener[], text: Listener[], [type: string]: Listener[] | undefined }} */
+      this._l = { state: [], text: [] }
+      /** @type {ReturnType<typeof setTimeout> | null} */
+      this._timer = null
+      /** @type {Closable | null} */
+      this._stream = null
+      /** @type {(h: Handle) => void} */
+      this._resolve = function () {}
+      /** @type {(e: EventError) => void} */
+      this._reject = function () {}
+      /** @type {Promise<Handle>} */
+      this.done = new Promise(function (resolve, reject) {
+        self._resolve = resolve
+        self._reject = reject
       })
+      this.done.catch(function () {}) // observing is optional
     }
-    this._timer = setTimeout(tick, delay)
+
+    /** @param {string} type state or text @param {Listener} cb @returns {this} */
+    on (type, cb) {
+      var l = this._l[type]
+      if (!l) throw new Error('unknown event type: ' + type)
+      l.push(cb)
+      var self = this
+      if (type === 'state' && this.state) setTimeout(function () { cb(/** @type {string} */ (self.state), self) }, 0)
+      if (type === 'text') this.stream()
+      return this
+    }
+
+    /** @param {string} type @param {Listener} cb @returns {this} */
+    off (type, cb) {
+      var l = this._l[type] || []
+      var i = l.indexOf(cb)
+      if (i >= 0) l.splice(i, 1)
+      return this
+    }
+
+    /** @param {DoneListener} cb @returns {this} */
+    onDone (cb) {
+      var self = this
+      this.done.then(function () { cb(self) }, function () {})
+      return this
+    }
+
+    /** @param {'state' | 'text'} type @param {string} value */
+    _emit (type, value) {
+      var l = this._l[type].slice()
+      for (var i = 0; i < l.length; i++) {
+        try { /** @type {Listener} */ (l[i])(value, this) } catch (err) { rethrowLater(err) }
+      }
+    }
+
+    /** @param {string} state @param {StateExtra} [extra] */
+    _set (state, extra) {
+      if (extra) {
+        if (extra.reason !== undefined) this.reason = extra.reason
+        if (extra.note !== undefined) this.note = extra.note
+      }
+      if (state === this.state || (this.state && TERMINAL[this.state])) return
+      this.state = state
+      this._emit('state', state)
+      if (!TERMINAL[state]) return
+      clearTimeout(this._timer || undefined)
+      if (state === 'done') {
+        if (this._toast) toast('Done: ' + (this.label || this.action), 'ok')
+        this._resolve(this)
+        for (var i = 0; i < doneListeners.length; i++) {
+          try { /** @type {DoneListener} */ (doneListeners[i])(this) } catch (err) { rethrowLater(err) }
+        }
+      } else {
+        if (this._toast && this.reason !== 'template-changed') toast(failureText(this), 'error')
+        var e = /** @type {EventError} */ (new Error('event ' + state + (this.reason ? ': ' + this.reason : '')))
+        e.state = state
+        e.reason = this.reason
+        e.handle = this
+        this._reject(e)
+      }
+    }
+
+    _poll () {
+      var self = this
+      var delay = config.pollMinMs
+      var failures = 0
+      function tick () {
+        if (TERMINAL[String(self.state)]) return
+        api('GET', '/_cb/events/' + encodeURIComponent(String(self.id))).then(function (r) {
+          if (r.status === 200 && r.json && typeof r.json.state === 'string') {
+            failures = 0
+            if (r.json.state !== self.state) delay = config.pollMinMs
+            self._set(r.json.state, r.json)
+          } else {
+            failures++
+          }
+        }, function () { failures++ }).then(function () {
+          if (TERMINAL[String(self.state)]) return
+          if (failures >= 10) {
+            if (self._toast) toast('Lost track of "' + (self.label || self.action) + '".', 'error')
+            return
+          }
+          delay = Math.min(Math.round(delay * 1.5), config.pollMaxMs)
+          self._timer = setTimeout(tick, delay)
+        })
+      }
+      this._timer = setTimeout(tick, delay)
+    }
+
+    /** @returns {this} */
+    stream () {
+      if (this._stream || !this.id || this.state === 'dropped') return this
+      var self = this
+      var url = '/_cb/events/' + encodeURIComponent(this.id) + '/stream'
+      var e = env()
+      if (!e.token && typeof EventSource === 'function') {
+        var es = new EventSource(url)
+        this._stream = es
+        es.addEventListener('text', function (m) { onFrame(self, 'text', m.data) })
+        es.addEventListener('state', function (m) { onFrame(self, 'state', m.data) })
+        es.addEventListener('end', function () { es.close() })
+        es.onerror = function () { es.close() } // never auto-reconnect: it would replay the text
+        return this
+      }
+      if (e.endpoint === null) return this
+      // Token mode: EventSource cannot send X-CB-Token, so read the SSE body with fetch.
+      var ctl = typeof AbortController === 'function' ? new AbortController() : null
+      /** @type {Closable} */
+      var closable = { close: function () { if (ctl) ctl.abort() } }
+      this._stream = closable
+      fetch(e.endpoint + url, {
+        headers: e.token ? { 'X-CB-Token': e.token } : {},
+        credentials: e.endpoint ? 'omit' : 'same-origin',
+        cache: 'no-store',
+        signal: ctl ? ctl.signal : undefined
+      }).then(function (res) {
+        if (res.status !== 200 || !res.body) return
+        var reader = res.body.getReader()
+        var dec = new TextDecoder()
+        var buf = ''
+        /** @returns {Promise<void>} */
+        function pump () {
+          return reader.read().then(function (r) {
+            if (r.done) return
+            buf += dec.decode(r.value, { stream: true }).replace(/\r\n?/g, '\n')
+            var i
+            while ((i = buf.indexOf('\n\n')) >= 0) {
+              var frame = buf.slice(0, i)
+              buf = buf.slice(i + 2)
+              var name = 'message'
+              /** @type {string[]} */
+              var data = []
+              frame.split('\n').forEach(function (line) {
+                if (line.indexOf('event:') === 0) name = line.slice(6).trim()
+                else if (line.indexOf('data:') === 0) data.push(line.slice(5).replace(/^ /, ''))
+              })
+              if (data.length && onFrame(self, name, data.join('\n'))) { closable.close(); return }
+            }
+            return pump()
+          })
+        }
+        return pump()
+      }).catch(function () {})
+      return this
+    }
   }
 
+  /**
+   * Apply one SSE frame to the handle. Returns true on `end`.
+   * @param {Handle} h @param {string} name @param {string} data
+   * @returns {boolean}
+   */
   function onFrame (h, name, data) {
     var obj
     try { obj = JSON.parse(data) } catch (err) { return false }
@@ -286,61 +439,10 @@
     return false
   }
 
-  Handle.prototype.stream = function () {
-    if (this._stream || !this.id || this.state === 'dropped') return this
-    var self = this
-    var url = '/_cb/events/' + encodeURIComponent(this.id) + '/stream'
-    var e = env()
-    if (!e.token && typeof EventSource === 'function') {
-      var es = new EventSource(url)
-      this._stream = es
-      es.addEventListener('text', function (m) { onFrame(self, 'text', m.data) })
-      es.addEventListener('state', function (m) { onFrame(self, 'state', m.data) })
-      es.addEventListener('end', function () { es.close() })
-      es.onerror = function () { es.close() } // never auto-reconnect: it would replay the text
-      return this
-    }
-    if (e.endpoint === null) return this
-    // Token mode: EventSource cannot send X-CB-Token, so read the SSE body with fetch.
-    var ctl = typeof AbortController === 'function' ? new AbortController() : null
-    this._stream = { close: function () { if (ctl) ctl.abort() } }
-    fetch(e.endpoint + url, {
-      headers: e.token ? { 'X-CB-Token': e.token } : {},
-      credentials: e.endpoint ? 'omit' : 'same-origin',
-      cache: 'no-store',
-      signal: ctl ? ctl.signal : undefined
-    }).then(function (res) {
-      if (res.status !== 200 || !res.body) return
-      var reader = res.body.getReader()
-      var dec = new TextDecoder()
-      var buf = ''
-      function pump () {
-        return reader.read().then(function (r) {
-          if (r.done) return
-          buf += dec.decode(r.value, { stream: true }).replace(/\r\n?/g, '\n')
-          var i
-          while ((i = buf.indexOf('\n\n')) >= 0) {
-            var frame = buf.slice(0, i)
-            buf = buf.slice(i + 2)
-            var name = 'message'
-            var data = []
-            frame.split('\n').forEach(function (line) {
-              if (line.indexOf('event:') === 0) name = line.slice(6).trim()
-              else if (line.indexOf('data:') === 0) data.push(line.slice(5).replace(/^ /, ''))
-            })
-            if (data.length && onFrame(self, name, data.join('\n'))) { self._stream.close(); return }
-          }
-          return pump()
-        })
-      }
-      return pump()
-    }).catch(function () {})
-    return this
-  }
-
   // -------------------------------------------------------------------------
   // send
 
+  /** @param {EventBody} body @param {number} retries @returns {Promise<ApiResult>} */
   function post (body, retries) {
     return api('POST', '/_cb/event', body).catch(function (err) {
       if (retries > 0) {
@@ -357,11 +459,18 @@
     })
   }
 
+  /**
+   * @param {string} action
+   * @param {object | null} [data]
+   * @param {SendOptions} [opts]
+   * @returns {Promise<Handle>}
+   */
   function send (action, data, opts) {
     opts = opts || {}
     var label = opts.label == null ? undefined : String(opts.label).slice(0, 200)
     var h = new Handle(action, label, opts)
     if (opts.onState) h.on('state', opts.onState)
+    /** @type {EventBody} */
     var body = {
       v: 1,
       action: action,
@@ -377,7 +486,7 @@
         h.id = j.id
         if (h._toast && !TERMINAL[j.state]) toast('Sent to Claude: ' + (label || action))
         h._set(j.state || 'queued')
-        if (!TERMINAL[h.state]) h._poll()
+        if (!TERMINAL[String(h.state)]) h._poll()
       } else if (r.status === 429 && j.id) {
         h.id = j.id
         h._set('dropped', { reason: j.reason || 'dropped' })
@@ -398,6 +507,7 @@
   // -------------------------------------------------------------------------
   // declarative wiring
 
+  /** @param {Element} el @param {string} state @param {Handle} [h] */
   function setElementState (el, state, h) {
     el.setAttribute('data-cb-state', ELEMENT_STATE[state] || state)
     if (ELEMENT_STATE[state] && ELEMENT_STATE[state] !== state) el.setAttribute('data-cb-detail', state)
@@ -409,15 +519,18 @@
     else el.removeAttribute('aria-busy')
   }
 
+  /** @param {Element} el */
   function inFlight (el) {
     var s = el.getAttribute('data-cb-state')
     return s === 'queued' || s === 'running'
   }
 
+  /** @param {Element} el */
   function text (el) {
     return (el.textContent || '').replace(/\s+/g, ' ').trim()
   }
 
+  /** @param {Labelled} el @param {Labelled | null} [submitter] @returns {string} */
   function labelFor (el, submitter) {
     var l = el.getAttribute('data-cb-label')
     if (l) return l
@@ -428,17 +541,26 @@
     return text(el) || el.value || el.getAttribute('aria-label') || el.getAttribute('title') || ''
   }
 
+  /**
+   * The form's fields as JSON values: strings, booleans (lone checkbox),
+   * string arrays (checkbox groups, multi-selects, repeated names) or null (unchecked radio group).
+   * @param {HTMLFormElement} form
+   * @param {Labelled | null} [submitter]
+   * @returns {Record<string, any>}
+   */
   function formFields (form, submitter) {
+    /** @type {Record<string, any>} */
     var out = {}
+    /** @type {Record<string, number>} */
     var counts = {}
     var els = form.elements
     var i, el
     for (i = 0; i < els.length; i++) {
-      el = els[i]
+      el = /** @type {FormControl} */ (els[i])
       if (el.name && el.type === 'checkbox') counts[el.name] = (counts[el.name] || 0) + 1
     }
     for (i = 0; i < els.length; i++) {
-      el = els[i]
+      el = /** @type {FormControl} */ (els[i])
       var name = el.name
       if (!name || el.disabled || (el.matches && el.matches('fieldset[disabled] *'))) continue
       var type = (el.type || '').toLowerCase()
@@ -448,7 +570,7 @@
       }
       if (type === 'button' || type === 'reset' || type === 'file' || el.tagName === 'FIELDSET' || el.tagName === 'OUTPUT') continue
       if (type === 'checkbox') {
-        if (counts[name] > 1) {
+        if ((counts[name] || 0) > 1) {
           if (!Array.isArray(out[name])) out[name] = []
           if (el.checked) out[name].push(el.value)
         } else {
@@ -458,11 +580,16 @@
         if (el.checked) out[name] = el.value
         else if (!(name in out)) out[name] = null
       } else if (type === 'select-multiple') {
+        /** @type {string[]} */
         var vals = []
-        for (var k = 0; k < el.options.length; k++) if (el.options[k].selected) vals.push(el.options[k].value)
+        var options = /** @type {HTMLOptionsCollection} */ (el.options)
+        for (var k = 0; k < options.length; k++) {
+          var option = /** @type {HTMLOptionElement} */ (options[k])
+          if (option.selected) vals.push(option.value)
+        }
         out[name] = vals
       } else if (name in out) {
-        out[name] = [].concat(out[name], el.value)
+        out[name] = /** @type {string[]} */ ([]).concat(out[name], el.value)
       } else {
         out[name] = el.value
       }
@@ -470,9 +597,11 @@
     return out
   }
 
+  /** @param {Labelled} el @param {Labelled | null} [submitter] */
   function fire (el, submitter) {
     if (inFlight(el)) return
-    var action = el.getAttribute('data-cb-action')
+    var action = /** @type {string} */ (el.getAttribute('data-cb-action'))
+    /** @type {Record<string, any>} */
     var data = {}
     var raw = el.getAttribute('data-cb-data')
     if (raw) {
@@ -486,7 +615,7 @@
       data = parsed
     }
     if (el.tagName === 'FORM') {
-      var fields = formFields(el, submitter)
+      var fields = formFields(/** @type {HTMLFormElement} */ (/** @type {Element} */ (el)), submitter)
       for (var k in fields) if (Object.prototype.hasOwnProperty.call(fields, k)) data[k] = fields[k]
     }
     var confirmText = el.getAttribute('data-cb-confirm')
@@ -502,7 +631,7 @@
 
   document.addEventListener('click', function (e) {
     if (e.defaultPrevented || e.button !== 0) return
-    var t = e.target
+    var t = /** @type {Partial<Element> | null} */ (e.target)
     if (!t || !t.closest) return
     var el = t.closest('[data-cb-action]')
     if (!el || el.tagName === 'FORM') return
@@ -511,13 +640,13 @@
   })
 
   document.addEventListener('submit', function (e) {
-    var form = e.target
+    var form = /** @type {Partial<HTMLFormElement> | null} */ (e.target)
     if (!form || !form.hasAttribute || !form.hasAttribute('data-cb-action') || e.defaultPrevented) return
     e.preventDefault()
-    fire(form, e.submitter || null)
+    fire(/** @type {HTMLFormElement} */ (form), e.submitter || null)
   })
 
-  window.ArtifactCallbacks = {
+  cbWindow.ArtifactCallbacks = {
     __cb: true,
     version: 1,
     send: send,
