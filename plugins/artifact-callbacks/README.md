@@ -33,6 +33,39 @@ status line say why (`node-missing` or `node-too-old`, with the version found) a
 Claude gets no callbacks section, so it writes static pages. Install a newer Node, then
 run `/callbacks start`.
 
+## Mod or channel build?
+
+This mod has a sibling, the [channel build](../artifact-callbacks-channel/README.md)
+(`artifact-callbacks-channel`). Both run the same listener, `client.js` and request
+checks; they differ in how a click reaches the session.
+
+**Use this mod** unless one of the reasons below applies. It installs like any plugin,
+works with any login, and gives you things the channel cannot:
+
+- **A confirm band** before a page's first event (or every event, with `confirm: always`),
+  the documented defence against one page posing as another.
+- **One turn per click**, queued natively, with `running` and `done` taken from that turn,
+  so a page never waits on Claude remembering to acknowledge it.
+- **Reply streaming without the model's help** (`streamReplies` streams the turn's text).
+- **`/callbacks` and a status line** you control directly, and it **stays off in remote and
+  SSH sessions**, where the loopback is not your browser's.
+
+**Use the channel build** when:
+
+- **Hooks modules don't load in your Claude Code.** Mods are an early-access surface; if
+  this mod never shows a status line or `/callbacks`, the channel build reaches the session
+  through an MCP server instead.
+- **You want clicks delivered mid-turn.** A channel message lands while Claude is working
+  and several can arrive together, which suits pages that send a stream of small inputs
+  (a checklist being ticked off, a live dashboard). This mod makes each click wait for its
+  own turn.
+- **You want Claude to choose what the page sees.** `callbacks_reply` sends text Claude
+  picks for the page, rather than the whole turn.
+
+The channel build is a research preview: it needs `--dangerously-load-development-channels`,
+a claude.ai login or Console API key, and admin opt-in on Team and Enterprise, and it has no
+confirm band. Never enable both in one session: each runs a listener of its own.
+
 ## How it works
 
 ```text

@@ -27,8 +27,10 @@ Artifact Callbacks is a mod that needs Node.js >= 22.18, which runs its TypeScri
 listener directly (no build step, no Python); see its
 [documentation](plugins/artifact-callbacks/README.md). Its channel build (an MCP server on the
 same Node, loaded with `claude --dangerously-load-development-channels
-plugin:artifact-callbacks-channel@dortort`) is for sessions on the channels research
-preview; see its [documentation](plugins/artifact-callbacks-channel/README.md).
+plugin:artifact-callbacks-channel@dortort`) is a research-preview alternative for sessions
+where mods don't load, or when clicks should reach Claude mid-turn; see
+[Mod or channel build?](plugins/artifact-callbacks/README.md#mod-or-channel-build) and its
+[documentation](plugins/artifact-callbacks-channel/README.md).
 Skills remain in their own repository so they can also be copied or used with other
 tools that support their format and dependencies.
 
