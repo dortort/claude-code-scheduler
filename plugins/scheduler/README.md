@@ -165,7 +165,9 @@ The release workflow requires:
 - An npm trusted publisher for `@dortort/scheduler` configured for the GitHub
   repository `dortort/claude-plugins`, workflow `release.yml`, environment `npm`
 
-The workflow publishes from `plugins/scheduler`. After a repository rename, update
+The workflow publishes from `plugins/scheduler`. Publication does not advance the
+marketplace's pinned version; use the repository's [release promotion process](../../RELEASING.md#promote-a-release-to-the-marketplace)
+to prepare and test a catalog PR afterward. After a repository rename, update
 the trusted publisher in npm to match the new repository name before releasing.
 
 ### Branch Protection (Recommended)
