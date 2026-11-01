@@ -39,6 +39,8 @@ describe('MCP handshake', () => {
     assert.equal(r.protocolVersion, '2025-06-18')
     assert.deepEqual(r.capabilities, { experimental: { 'claude/channel': {} }, tools: {} })
     assert.equal(r.serverInfo.name, 'artifact-callbacks-channel')
+    const manifest = JSON.parse(readFileSync(new URL('../.claude-plugin/plugin.json', import.meta.url), 'utf8'))
+    assert.equal(r.serverInfo.version, manifest.version, 'MCP reports the installed plugin version')
     const { port } = await listenerInfo(c)
     assert.match(r.instructions, new RegExp(`http://127\\.0\\.0\\.1:${port}/a/<file>`))
     assert.match(r.instructions, /\.claude\/artifacts\//)
