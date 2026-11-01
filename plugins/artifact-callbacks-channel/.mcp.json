@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "callbacks": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/server/server.ts"],
+      "env": {
+        "CB_PROJECT_DIR": "${CLAUDE_PROJECT_DIR}",
+        "CB_PORT": "${user_config.port}",
+        "CB_ARTIFACTS_DIR": "${user_config.artifactsDir}",
+        "CB_ALLOW_FILE_ORIGIN": "${user_config.allowFileOrigin}",
+        "CB_MAX_PROMPT_CHARS": "${user_config.maxPromptChars}"
+      }
+    }
+  }
+}
