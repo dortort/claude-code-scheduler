@@ -84,6 +84,12 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Browser tests
         run: npm run test:browser
+      - name: Install Claude Code and tmux for the real-session test
+        run: |
+          npm install -g @anthropic-ai/claude-code
+          sudo apt-get install -y tmux
+      - name: Real-session end-to-end (skips, saying why, without model access)
+        run: npm run test:e2e
 
   channel:
     name: Channel adapter (${{ matrix.os }}, Node ${{ matrix.node-version }})
