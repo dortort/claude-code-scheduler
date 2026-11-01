@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import {
   PLUGIN_DIR, read, section, codeBlocks, tableRows, firstCode, frontMatter,
   cbAttributes, cbMetaNames, clientSurface
-} from './helpers.mjs'
+} from './helpers.ts'
 
 const skill = read(PLUGIN_DIR, 'skills', 'interactive-artifacts', 'SKILL.md')
 const client = clientSurface(read(PLUGIN_DIR, 'sidecar', 'client.js'))
@@ -122,10 +122,13 @@ describe('SKILL.md against client.js', () => {
 
   test('the state values listed match what client.js maps to', () => {
     const src = read(PLUGIN_DIR, 'sidecar', 'client.js')
-    const map = /var ELEMENT_STATE = \{([\s\S]*?)\}/.exec(src)[1]
+    const found = /var ELEMENT_STATE = \{([\s\S]*?)\}/.exec(src)
+    assert.ok(found, 'client.js has ELEMENT_STATE')
+    const map = found[1]
     const shown = new Set([...map.matchAll(/:\s*'([a-z-]+)'/g)].map((m) => m[1]))
     const row = tableRows(section(skill, 'While an event is in flight: `data-cb-state`'))
       .find((r) => firstCode(r[0]) === 'data-cb-state')
+    assert.ok(row, 'the state table has a data-cb-state row')
     assert.deepEqual([...row[1].matchAll(/`([a-z-]+)`/g)].map((m) => m[1]).sort(), [...shown].sort())
   })
 
@@ -144,7 +147,9 @@ describe('SKILL.md against client.js', () => {
   })
 
   test('the file:// section names the tool the mod registers for page tokens', () => {
-    const tool = /PAGE_TOKEN_TOOL = '([a-z_]+)'/.exec(read(PLUGIN_DIR, 'hooks', 'lib', 'token.ts'))[1]
+    const named = /PAGE_TOKEN_TOOL = '([a-z_]+)'/.exec(read(PLUGIN_DIR, 'hooks', 'lib', 'token.ts'))
+    assert.ok(named, 'token.ts names PAGE_TOKEN_TOOL')
+    const tool = named[1]
     assert.ok(section(skill, 'file:// pages (token mode)').includes(`\`${tool}\` tool`), `SKILL.md names ${tool}`)
     assert.ok(read(PLUGIN_DIR, 'README.md').includes(`\`${tool}\` tool`), `README names ${tool}`)
     const tags = read(PLUGIN_DIR, 'hooks', 'lib', 'token.ts')
@@ -165,5 +170,14 @@ describe('SKILL.md against client.js', () => {
     for (const name of ['Checklist', 'Choose one', 'Forms', 'Regenerate this page', 'Reload on done']) {
       assert.ok(p.includes(name), name)
     }
+  })
+})
+
+describe('SKILL.md listener requirements', () => {
+  test('names the TypeScript listener, the Node minimum and the down reasons', () => {
+    assert.ok(skill.includes('node sidecar/listener.ts'))
+    assert.match(skill, /Node\.js \d+\.\d+ or later/)
+    for (const code of ['node-missing', 'node-too-old']) assert.ok(skill.includes(`\`${code}\``), code)
+    assert.doesNotMatch(skill, /python|listener\.mjs|`runtime`/i)
   })
 })

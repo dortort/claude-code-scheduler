@@ -9,11 +9,11 @@
   },
   "scripts": {
     "test": "npm run test:unit && npm run test:conformance && npm run test:browser && npm run test:docs",
-    "typecheck": "tsc --noEmit -p tsconfig.node.json",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.json",
     "test:unit": "node --test \"test/unit/*.spec.ts\"",
     "test:conformance": "node --test \"test/conformance/*.spec.ts\"",
     "test:browser": "node --test \"test/browser/*.spec.ts\"",
-    "test:docs": "node --test \"test/docs/*.{spec.ts,test.mjs}\"",
+    "test:docs": "node --test \"test/docs/*.spec.ts\"",
     "test:hooks": "claude plugin test .",
     "validate": "claude plugin validate ."
   },
