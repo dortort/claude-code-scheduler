@@ -1,0 +1,63 @@
+{
+  "name": "artifact-callbacks",
+  "version": "0.1.0",
+  "description": "Turn clicks on HTML pages Claude writes into follow-up prompts in the running session, through a loopback-only listener",
+  "author": {
+    "name": "dortort"
+  },
+  "license": "MIT",
+  "keywords": ["artifacts", "html", "callbacks", "interactive", "mod", "prompts"],
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "port": {
+      "type": "number",
+      "title": "Port",
+      "description": "Fixed loopback port for the listener (0 picks a random free port each session)",
+      "default": 0
+    },
+    "confirm": {
+      "type": "string",
+      "title": "Confirm events",
+      "description": "first-per-page: ask before the first event of each page; always: ask before every event; never: run events straight away",
+      "default": "first-per-page",
+      "options": ["first-per-page", "always", "never"]
+    },
+    "artifactsDir": {
+      "type": "string",
+      "title": "Artifacts folder",
+      "description": "Folder the listener serves pages from, relative to the session's working directory",
+      "default": ".claude/artifacts"
+    },
+    "allowFileOrigin": {
+      "type": "boolean",
+      "title": "Allow file:// pages",
+      "description": "Accept events from pages opened straight from disk, authenticated by a per-page token",
+      "default": false
+    },
+    "runtime": {
+      "type": "string",
+      "title": "Listener runtime",
+      "description": "auto tries node, then python3",
+      "default": "auto",
+      "options": ["auto", "node", "python3"]
+    },
+    "maxPromptChars": {
+      "type": "number",
+      "title": "Max prompt length",
+      "description": "Cap on the rendered prompt for one event, in characters",
+      "default": 4000
+    },
+    "autoStart": {
+      "type": "boolean",
+      "title": "Start automatically",
+      "description": "Start the listener with the session; when off, run /callbacks start",
+      "default": true
+    },
+    "streamReplies": {
+      "type": "boolean",
+      "title": "Stream replies to pages",
+      "description": "Write Claude's reply text for each event where the page can stream it from /_cb/events/<id>/stream",
+      "default": false
+    }
+  }
+}

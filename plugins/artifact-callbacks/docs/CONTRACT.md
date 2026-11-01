@@ -240,6 +240,14 @@ token mode carry:
   escaped (newlines → spaces, backticks/quotes neutralised, wrapped as quoted data) and capped
   at 500 chars, whole prompt capped at `maxPromptChars`. Submitted framed (never `asUser`);
   the mod's own `prompt.submit` hook attaches the raw event JSON as `context`.
+  **Deviation (engine behaviour, 2.1.316):** the engine runs none of a plugin's hooks on
+  a `$.prompt.submit` the plugin makes outside a hook dispatch of its own (from the
+  sidecar's stream, a timer, a band press), so the hook only sees submissions made inside
+  one (e.g. the next event, pumped from `turn.complete`). For the others the mod appends
+  the same text as a hidden user-role row (`$.session.append`, `type: "user"`) when the
+  event's turn starts; exactly one of the two carries it. Pumps started from a
+  `/callbacks` command run off a `$.clock.after(0)` timer, because a submit made inside a
+  `command.run` hook is refused.
 - Supervision: sidecar exit → restart after 1 s, 5 s, 30 s, keeping the port when free;
   after 3 failures stay down and toast once.
 - Compose section (`prompt.compose`, `scope: 'session'`) present only while the listener
