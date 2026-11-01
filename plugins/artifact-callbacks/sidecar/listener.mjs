@@ -423,7 +423,7 @@ function start () {
       clearTimeout(timer)
       res.end()
     }
-    req.on('close', () => {
+    res.on('close', () => {
       closed = true
       clearInterval(ping)
       clearTimeout(timer)
@@ -516,7 +516,11 @@ function start () {
     }
     if (requestPath(req.url) === null) return bare(res, 404)
     const method = req.method
-    const only = (m, fn) => (method === m ? fn() : (emitMethod(req, path), bare(res, 405, { Allow: m })))
+    const only = (m, fn) => {
+      if (method === m) return fn()
+      emitMethod(req, path)
+      bare(res, 405, { Allow: m })
+    }
     if (path === '/_cb/health') return only('GET', () => health(req, res))
     if (path === '/_cb/client.js') return only('GET', () => clientJs(req, res))
     if (path === '/_cb/event') return only('POST', () => postEvent(req, res, path))
