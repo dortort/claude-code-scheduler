@@ -72,7 +72,7 @@ works on click, but buttons are accessible by default; prefer them.
 | --- | --- |
 | `data-cb-action` | Action name, required. `[a-z0-9_-]`, 1 to 40 characters, e.g. `fix`, `skip`, `apply-all`. |
 | `data-cb-data` | A JSON **object** merged into the event's `data`. Use single quotes around the attribute so the JSON can use double quotes: `data-cb-data='{"id":7}'`. Invalid JSON or a non-object makes the control refuse to send (and log an error). |
-| `data-cb-prompt` | The prompt template for this action. Placeholders: `{{label}}`, `{{action}}`, `{{page}}`, `{{data.x}}` (nested: `{{data.a.b}}`), `{{data \| json}}`, `{{data.x \| json}}`. Each `{{data.x}}` value is inserted escaped, quoted and capped at 500 characters; unknown placeholders render empty. Max 2,000 characters. |
+| `data-cb-prompt` | The prompt template for this action. Placeholders: `{{label}}`, `{{action}}`, `{{page}}`, `{{data.x}}` (nested: `{{data.a.b}}`), `{{data \| json}}`, `{{data.x \| json}}`. Every data placeholder (`\| json` or not) is inserted escaped, quoted and capped at 500 characters, objects and arrays as compact JSON; unknown placeholders render empty. Max 2,000 characters. |
 | `data-cb-label` | Label sent with the event. Default: the element's text (for a form: the submit button's text). Max 200 characters. |
 | `data-cb-confirm` | Text for a browser `confirm()` before sending. Cancel sends nothing. Use on destructive actions. |
 
