@@ -171,7 +171,7 @@ npm run test:browser             # Chromium end-to-end tests of sidecar/client.j
 npm run test:docs                # README, SKILL.md, plugin.json and marketplace checks
 
 npm run validate                 # claude plugin validate .: manifest, hooks module and types
-npm run test:hooks               # claude plugin test .: hooks module suites (hooks/*.test.ts)
+npm run test:hooks               # claude plugin test .: hooks module suites (hooks/*.test.ts; the node suites are *.spec.ts)
 ```
 
 To try it in a session from this checkout:
