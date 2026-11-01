@@ -1,6 +1,7 @@
 // The MCP side: initialize (declaring the experimental claude/channel
 // capability and tools), ping, tools/list, tools/call, and the channel
 // notifications, held back until the client has sent notifications/initialized.
+import { readFileSync } from 'node:fs'
 import { INVALID_PARAMS, Peer, RpcError } from './rpc.ts'
 import type { Params } from './rpc.ts'
 import { CHANNEL_METHOD } from './adapter.ts'
@@ -10,7 +11,8 @@ import type { Adapter, ChannelMessage } from './adapter.ts'
  * Claude Code does not register a channel server that negotiates it. */
 export const PROTOCOL_VERSIONS: readonly string[] = ['2025-06-18', '2025-03-26', '2024-11-05']
 
-export const SERVER_INFO = { name: 'artifact-callbacks-channel', version: '0.1.0' }
+const manifest = JSON.parse(readFileSync(new URL('../../.claude-plugin/plugin.json', import.meta.url), 'utf8')) as { name: string; version: string }
+export const SERVER_INFO = { name: manifest.name, version: manifest.version }
 
 /** How long initialize waits for the listener, so the instructions can name its port. */
 export const READY_WAIT_MS = 3000

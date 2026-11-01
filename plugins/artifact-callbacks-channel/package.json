@@ -1,7 +1,7 @@
 {
   "name": "@dortort/artifact-callbacks-channel-dev",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Dev scripts for the Artifact Callbacks channel adapter (the plugin itself ships no node_modules)",
   "type": "module",
   "engines": {
