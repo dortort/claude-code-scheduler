@@ -5,7 +5,7 @@
 import http from 'node:http'
 import type { IncomingMessage, ServerResponse, OutgoingHttpHeaders } from 'node:http'
 import type { AddressInfo, Socket } from 'node:net'
-import { readFileSync, statSync, realpathSync, createReadStream } from 'node:fs'
+import { readFileSync, statSync, realpathSync, createReadStream, writeFileSync, renameSync } from 'node:fs'
 import { open, readFile } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
 import { dirname, join, isAbsolute } from 'node:path'
@@ -18,7 +18,8 @@ import {
   isAllowedHost, isAllowedOrigin, isJsonContentType, requestPath, normalizeArtifactPath,
   pageFromBody, pageFromFileBody, pageFromReferer, resolveInsideRoot, mimeFor, isHtmlPath,
   extractPromptTemplates, validateBody, parseStatus, publicRecord, isEventRecord, EMPTY_STATUS,
-  RateLimiter, IdempotencyCache, sseFrame, NdjsonSplitter, streamLine, isOrphaned
+  RateLimiter, IdempotencyCache, sseFrame, NdjsonSplitter, streamLine, isOrphaned,
+  parseServedPages, serializeServedPages, SERVED_PAGES_CAP
 } from './lib.ts'
 import type {
   StdoutLine, RejectedLine, RejectReason, ErrorReason, DropReason, EventBody, Status,
@@ -86,6 +87,7 @@ interface Config {
   secret: string | undefined
   allowFile: boolean
   streamDir: string | null
+  servedFile: string | null
   clientJs: string
   timeoutMs: number
   pingMs: number
@@ -105,6 +107,7 @@ const cfg: Config = {
   secret: env.CB_SECRET,
   allowFile: env.CB_ALLOW_FILE_ORIGIN === '1',
   streamDir: env.CB_STREAM_DIR || null,
+  servedFile: env.CB_SERVED_FILE || null,
   clientJs: env.CB_CLIENT_JS || join(here, 'client.js'),
   timeoutMs: intEnv('CB_REQUEST_TIMEOUT_MS', 10_000, 1, 3_600_000),
   pingMs: intEnv('CB_STREAM_PING_MS', 15_000, 1, 3_600_000)
@@ -117,6 +120,7 @@ function checkConfig (c: Config): [ErrorReason, string] | CheckedConfig {
   if (typeof c.secret !== 'string' || !SECRET_RE.test(c.secret)) return ['bad-config', 'CB_SECRET must be at least 32 hex characters']
   if (!c.statusFile || !isAbsolute(c.statusFile)) return ['bad-config', 'CB_STATUS_FILE must be an absolute path']
   if (c.streamDir && !isAbsolute(c.streamDir)) return ['bad-config', 'CB_STREAM_DIR must be an absolute path']
+  if (c.servedFile && !isAbsolute(c.servedFile)) return ['bad-config', 'CB_SERVED_FILE must be an absolute path']
   if (!c.root || !isAbsolute(c.root)) return ['bad-config', 'CB_ROOT must be an absolute path']
   try {
     if (!statSync(c.root).isDirectory()) return ['root-missing', 'CB_ROOT is not a directory']
@@ -150,11 +154,40 @@ function start (cfg: CheckedConfig): void {
   let port = 0
   let cookie = ''
   let cookieKey = ''
-  const servedPages = new Set<string>()
+  // Pages served under /a/. With CB_SERVED_FILE the set outlives the process, so a
+  // listener restarted with the same secret and port still takes clicks from tabs
+  // opened before the restart.
+  const servedPages = new Set<string>(loadServedPages())
   const own = new Map<string, OwnRecord>()
   const idem = new IdempotencyCache()
   const rate = new RateLimiter()
   let lastStatus: Status = EMPTY_STATUS
+
+  function loadServedPages (): string[] {
+    if (!cfg.servedFile) return []
+    try {
+      return parseServedPages(readFileSync(cfg.servedFile, 'utf8'))
+    } catch {
+      return []
+    }
+  }
+
+  function recordServedPage (rel: string): void {
+    if (servedPages.has(rel)) return
+    servedPages.add(rel)
+    if (servedPages.size > SERVED_PAGES_CAP) {
+      const oldest = servedPages.values().next()
+      if (!oldest.done) servedPages.delete(oldest.value)
+    }
+    if (!cfg.servedFile) return
+    const tmp = cfg.servedFile + '.tmp'
+    try {
+      writeFileSync(tmp, serializeServedPages(servedPages))
+      renameSync(tmp, cfg.servedFile)
+    } catch (err) {
+      process.stderr.write(`artifact-callbacks: cannot write CB_SERVED_FILE: ${(err as Error).message}\n`)
+    }
+  }
 
   function readStatus (): Status {
     let text: string
@@ -301,7 +334,7 @@ function start (cfg: CheckedConfig): void {
     })
     stream.once('open', () => {
       if (isHtmlPath(rel)) {
-        servedPages.add(rel)
+        recordServedPage(rel)
         res.setHeader('Set-Cookie', `${cookieKey}=${cookie}; HttpOnly; SameSite=Strict; Path=/`)
       }
       res.setHeader('Content-Type', mimeFor(rel))

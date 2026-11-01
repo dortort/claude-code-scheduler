@@ -54,12 +54,13 @@ ever sent on it. Configuration is environment only:
 | `CB_SECRET` | Random secret (>= 32 hex chars). Never logged, never sent to the browser. |
 | `CB_ALLOW_FILE_ORIGIN` | `1` enables file:// token mode. Default off. |
 | `CB_STREAM_DIR` | Optional (M5). Folder holding `<event id>.ndjson` reply-stream files written by the mod. |
+| `CB_SERVED_FILE` | Optional. Absolute path of the served-pages record, `{"v":1,"pages":["triage.html",…]}`, written by the listener (`.tmp` then rename) each time it serves an HTML page it had not served yet, and read once at startup. Unusable entries (failing the `/a/` path rules or not `.html`) and an unparsable file are ignored; at most the 10,000 newest pages are kept. It lets a listener restarted with the same secret and port take events from tabs opened before the restart. |
 | `CB_CLIENT_JS` | Optional override path of client.js (tests). Default: `client.js` beside the listener. |
 | `CB_REQUEST_TIMEOUT_MS` | Optional test override of the 10 s request timeout (headers and body). |
 | `CB_STREAM_PING_MS` | Optional test override of the 15 s SSE `: ping` interval. |
 
 `CB_SECRET` must match `^[0-9a-fA-F]{32,}$`; HMAC keys are the UTF-8 bytes of the
-string as given (not hex-decoded). `CB_PORT`, `CB_ROOT`, `CB_STATUS_FILE`, `CB_STREAM_DIR`
+string as given (not hex-decoded). `CB_PORT`, `CB_ROOT`, `CB_STATUS_FILE`, `CB_STREAM_DIR`, `CB_SERVED_FILE`
 must be absolute paths / integers; violations are `error/bad-config` (exit 1). A
 missing or non-directory `CB_ROOT` is `error/root-missing` (exit 1).
 
@@ -270,7 +271,8 @@ token mode carry:
   versions shown by the status line and `/callbacks`). argv
   `["node", "<root>/sidecar/listener.ts"]`. There is no `runtime` option and no other listener runtime.
 - Run dir: a per-session folder outside the artifacts folder (e.g.
-  `<cwd>/.claude/.artifact-callbacks/<session id>/`) holding `status.json` and `streams/`.
+  `<cwd>/.claude/.artifact-callbacks/<session id>/`) holding `status.json`, `streams/` and
+  `served-pages.json` (passed as `CB_SERVED_FILE`, the same file across restarts and hot reloads).
 - Queue: FIFO depth cap 5, one event in flight (`current`), confirm policy, 5 min
   approval expiry, coalescing 1.5 s, pause/resume, `/clear` keeps everything,
   hot-reload marks a `running` event `done` with `note: "reload"`, Esc interrupt →
@@ -311,7 +313,7 @@ token mode carry:
 
 A stdio MCP server (JSON-RPC 2.0, one message per line, Node stdlib only) that spawns
 the same `sidecar/listener.ts` with the same `CB_*` environment (`CB_STREAM_DIR` always
-set) and stands in for the mod. Everything above about the sidecar, status.json, the
+set, and `CB_SERVED_FILE=<run dir>/served-pages.json`) and stands in for the mod. Everything above about the sidecar, status.json, the
 routes, streaming and the client holds unchanged; these are its own rules.
 
 - **Handshake.** `initialize` answers `capabilities: { experimental: { "claude/channel": {} },

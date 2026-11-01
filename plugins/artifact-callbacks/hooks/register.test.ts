@@ -84,6 +84,7 @@ describe('session start', () => {
       CB_ROOT: ARTIFACTS,
       CB_STATUS_FILE: STATUS,
       CB_SECRET: expect.stringMatching(/^[0-9a-f]{64}$/),
+      CB_SERVED_FILE: `${RUN}/served-pages.json`,
     })
     expect(kit.commands).toEqual(['callbacks'])
     expect(kit.runs).toContainEqual(['mkdir', '-p', ARTIFACTS, `${RUN}/streams`])
@@ -676,6 +677,8 @@ describe('supervision', () => {
       expect(kit.sidecars).toHaveLength(i + 2)
       expect(kit.sidecar().env.CB_PORT).toBe('51234')
       expect(kit.sidecar().env.CB_SECRET).toBe(secret)
+      // Same served-pages file, so tabs from before the crash keep working.
+      expect(kit.sidecar().env.CB_SERVED_FILE).toBe(`${RUN}/served-pages.json`)
       expect(await sectionText($)).toContain(':51234/')
     }
     kit.sidecar().exit(1)
@@ -747,6 +750,7 @@ describe('supervision', () => {
     expect(kit.status().events.ev_running000).toMatchObject({ state: 'done', note: 'reload', turnEndedAt: T0 })
     expect(kit.sidecar().env.CB_PORT).toBe('47000')
     expect(kit.sidecar().env.CB_SECRET).toBe('ab'.repeat(32))
+    expect(kit.sidecar().env.CB_SERVED_FILE).toBe(`${RUN}/served-pages.json`)
     expect(kit.stateOf('ev_waiting000')).toBe('awaiting-approval')
     await kit.clock.advance(1000)
     await kit.settle()
