@@ -61,7 +61,9 @@ missing or non-directory `CB_ROOT` is `error/root-missing` (exit 1).
 
 Lifetime: binds `127.0.0.1` only (never `0.0.0.0`/`::`). Exits on SIGTERM/SIGINT,
 when writing to stdout fails (EPIPE), and when its parent process goes away
-(poll `ppid` once per second; a change means orphaned).
+(poll once per second: a changed `ppid`, or the original parent pid no longer
+existing per `process.kill(pid, 0)`, means orphaned; Windows never re-parents, so
+only the second check fires there).
 
 ### stdout (NDJSON, one object per line, nothing else on stdout; diagnostics go to stderr)
 
